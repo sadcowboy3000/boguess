@@ -109,17 +109,42 @@
         width: 100%;
         height: 220px;
         border-radius: 14px 14px 0 0;
-        overflow: hidden;
+        overflow: visible;
         box-shadow: 0 -6px 32px rgba(0, 0, 0, 0.65);
         pointer-events: auto;
         user-select: none;
       }
 
+      #map-resize-handle {
+        position: absolute;
+        top: -10px;
+        left: 0;
+        right: 0;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: ns-resize;
+        z-index: 10;
+        touch-action: none;
+      }
+
+      #map-resize-handle::after {
+        content: '';
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.45);
+        transition: background 0.15s;
+      }
+
+      #map-resize-handle:hover::after {
+        background: rgba(255, 255, 255, 0.85);
+      }
+
       #map {
         width: 100%;
         height: 100%;
-        position: absolute;
-        inset: 0;
         pointer-events: auto;
       }
 
@@ -250,11 +275,14 @@
       .staple-bar-track {
         width: 72px;
         height: 200px;
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.336);
         border-radius: 2px 2px 0 0;
         display: flex;
         align-items: flex-end;
         overflow: hidden;
+        border-style: solid;
+        border-width: 1px;
+        border-color: rgba(255, 255, 255, 0.3);
       }
 
       .staple-bar-fill {
@@ -314,7 +342,7 @@
         width: 100%;
         max-width: 640px;
         margin-top: 1rem;
-        background: linear-gradient(to bottom, rgba(255, 255, 255, 0.407), rgba(255, 255, 255, 0.542));
+        background: linear-gradient(to bottom, rgb(65, 65, 65), rgba(255, 255, 255, 0.542));
         border-radius: 1px;
         border-style: solid;
         border-width: 1px;
@@ -402,6 +430,36 @@
         border: 1px solid rgba(255, 255, 255, 0.3);
       }
 
+      #welcome-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        pointer-events: none;
+      }
+
+      #welcome-text {
+        color: #fff;
+        font-size: clamp(1rem, 2.5vw, 1.4rem);
+        text-align: center;
+        line-height: 1.7;
+        letter-spacing: 0.03em;
+        text-shadow: 0 2px 24px rgba(0,0,0,0.9);
+        max-width: 36ch;
+        animation: welcomeFade 5s ease forwards;
+        text-shadow: #000 0px 2px 8px;
+      }
+
+      @keyframes welcomeFade {
+        0%   { opacity: 0; transform: translateY(10px); }
+        15%  { opacity: 1; transform: translateY(0); }
+        70%  { opacity: 1; }
+        100% { opacity: 0; }
+      }
+
       @media (max-width: 600px) {
         #map-wrap {
           height: 160px;
@@ -413,7 +471,7 @@
   <body>
     <div class="topbar">
       <a class="link" href="index.html">← Tillbaka</a>
-      <div class="score">Runda <strong id="round">0</strong> · Poäng <strong id="score">0 p</strong></div>
+      <div class="score">Runda <strong id="round">0</strong><span id="score-wrap" style="display:none"> · Poäng <strong id="score">0 p</strong></span></div>
     </div>
 
     <div class="layout">
@@ -428,6 +486,10 @@
       <div id="stats-providers"></div>
     </div>
 
+    <div id="welcome-overlay">
+      <p id="welcome-text">Välkommen till ditt nya hem!<br>Navigera dig och använd sedan kartan för gissa vart du hamnat.</p>
+    </div>
+
     <div id="status" style="display:none" aria-live="polite"></div>
     <div class="bottom-ui">
       <div id="map-actions">
@@ -435,7 +497,8 @@
         <button id="next-btn" type="button" style="display:none">Nästa runda</button>
       </div>
       <div id="map-wrap">
-        <div id="map"></div>
+        <div id="map-resize-handle"></div>
+        <div id="map" style="position:absolute;inset:0;border-radius:14px 14px 0 0;overflow:hidden;"></div>
       </div>
     </div>
     <script type="module">
@@ -1336,6 +1399,7 @@
 
         hideStatsOverlay();
         resetAscii();
+        clearAsciiMapLine();
         setControls(false);
         setStatus("Letar efter en slumpmässig plats i Sverige...");
 
@@ -1709,6 +1773,7 @@
         }
 
         answerLocked = true;
+        setMapHeight(220);
         if (actualMarker) {
           actualMarker.setMap(null);
         }
@@ -1717,7 +1782,7 @@
           position: actualPosition,
           title: `Actual location: ${activeCity.name}`,
           icon: {
-            path: "M 0 -11.5 L 2.2 -3.5 L 10.5 -3.5 L 3.6 1.2 L 6 9 L 0 4.3 L -6 9 L -3.6 1.2 L -10.5 -3.5 L -2.2 -3.5 Z",
+            path: "M 0 -11 L 10 -1 L 7 -1 L 7 9 L -7 9 L -7 -1 L -10 -1 Z",
             scale: 1,
             fillColor: "#000000",
             fillOpacity: 0.95,
@@ -1735,10 +1800,15 @@
             { lat: actualPosition.lat, lng: actualPosition.lng },
             { lat: guessPosition.lat, lng: guessPosition.lng }
           ],
-          strokeColor: "#5bc0ff",
+          strokeColor: "#000000",
           strokeOpacity: 0.9,
           strokeWeight: 3
         });
+        const bounds = new google.maps.LatLngBounds();
+        bounds.extend(actualPosition);
+        bounds.extend(guessPosition);
+        map.fitBounds(bounds, { top: 20, right: 20, bottom: 20, left: 20 });
+
         const distance = distanceKm(actualPosition, guessPosition);
         const maxPoints = 5000;
         const points = Math.max(0, Math.round(maxPoints * Math.exp(-distance / 2000)));
@@ -1862,6 +1932,88 @@
           salaryDataLoadError = true;
         }
       }
+
+      // ── ASCII map line ──────────────────────────────────────
+      let asciiLineOverlay = null;
+      let asciiLineCanvas  = null;
+      let asciiLinePoints  = null; // { a: LatLng, b: LatLng }
+
+      function charForAngle(rad) {
+        const deg = ((rad * 180 / Math.PI) % 180 + 180) % 180;
+        if (deg < 22.5 || deg >= 157.5) return '-';
+        if (deg < 67.5)  return '\\';
+        if (deg < 112.5) return '|';
+        return '/';
+      }
+
+      function renderAsciiLine() {
+        if (!asciiLineCanvas || !asciiLinePoints || !asciiLineOverlay) return;
+        const proj = asciiLineOverlay.getProjection();
+        if (!proj) return;
+
+        const wrap = document.getElementById('map-wrap');
+        const W = wrap.offsetWidth;
+        const H = wrap.offsetHeight;
+        asciiLineCanvas.width  = W;
+        asciiLineCanvas.height = H;
+
+        const ctx = asciiLineCanvas.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+
+        const p1 = proj.fromLatLngToContainerPixel(asciiLinePoints.a);
+        const p2 = proj.fromLatLngToContainerPixel(asciiLinePoints.b);
+        if (!p1 || !p2) return;
+
+        const fontSize = 9;
+        ctx.font = `${fontSize}px "Courier New", monospace`;
+        ctx.fillStyle = '#5bc0ff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        const step = fontSize * 0.65;
+        const steps = Math.max(1, Math.round(len / step));
+        const ch = charForAngle(Math.atan2(dy, dx));
+
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          ctx.fillText(i === 0 || i === steps ? '*' : ch, p1.x + dx * t, p1.y + dy * t);
+        }
+      }
+
+      function drawAsciiMapLine(posA, posB) {
+        asciiLinePoints = {
+          a: new google.maps.LatLng(posA.lat, posA.lng),
+          b: new google.maps.LatLng(posB.lat, posB.lng)
+        };
+
+        if (!asciiLineCanvas) {
+          asciiLineCanvas = document.createElement('canvas');
+          asciiLineCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;';
+          document.getElementById('map-wrap').appendChild(asciiLineCanvas);
+        }
+
+        if (!asciiLineOverlay) {
+          asciiLineOverlay = new google.maps.OverlayView();
+          asciiLineOverlay.onAdd    = () => {};
+          asciiLineOverlay.onRemove = () => {};
+          asciiLineOverlay.draw     = renderAsciiLine;
+          asciiLineOverlay.setMap(map);
+        } else {
+          renderAsciiLine();
+        }
+      }
+
+      function clearAsciiMapLine() {
+        asciiLinePoints = null;
+        if (asciiLineCanvas) {
+          const ctx = asciiLineCanvas.getContext('2d');
+          ctx.clearRect(0, 0, asciiLineCanvas.width, asciiLineCanvas.height);
+        }
+      }
+      // ───────────────────────────────────────────────────────
 
       async function initialize() {
         const swedenCenter = { lat: 62.0, lng: 16.0 };
