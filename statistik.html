@@ -139,7 +139,7 @@
 
       .muni-main {
         display: grid;
-        grid-template-columns: minmax(160px, 1.8fr) minmax(130px, 1fr) minmax(0, 2.5fr);
+        grid-template-columns: minmax(160px, 1.8fr) minmax(130px, 1fr) minmax(100px, 0.9fr) minmax(0, 2fr);
         gap: 1.2rem;
         align-items: center;
       }
@@ -221,6 +221,7 @@
         .list { padding: 0 1rem 5rem; margin-top: 8.5rem; }
         .muni-main { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
         .muni-links { grid-column: 1 / -1; }
+        .muni-rent  { grid-column: 1 / -1; }
       }
 
       @media (max-width: 480px) {
@@ -265,6 +266,26 @@
       let sortKey   = 'name';
       let query     = '';
       let activeTab = 'kommuner';
+      let RENT_BY_NAME = {};
+
+      async function loadRents() {
+        try {
+          const [munisRes, rentsRes] = await Promise.all([
+            fetch('municipalities.json'),
+            fetch('rents.json')
+          ]);
+          if (!munisRes.ok || !rentsRes.ok) return;
+          const munis = await munisRes.json();
+          const rents = await rentsRes.json();
+          for (const m of munis) {
+            if (m.name && m.scbCode && rents[m.scbCode] != null) {
+              RENT_BY_NAME[m.name] = Math.round(rents[m.scbCode] * 35);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load rent data', e);
+        }
+      }
 
       function queueBar(avg) {
         const filled = Math.round((Math.min(avg, MAX_QUEUE) / MAX_QUEUE) * 20);
@@ -291,6 +312,8 @@
         if (sortKey === 'name')       list.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
         if (sortKey === 'queue_asc')  list.sort((a, b) => a.waitAvg - b.waitAvg);
         if (sortKey === 'queue_desc') list.sort((a, b) => b.waitAvg - a.waitAvg);
+        if (sortKey === 'rent_asc')   list.sort((a, b) => (RENT_BY_NAME[a.name] || 0) - (RENT_BY_NAME[b.name] || 0));
+        if (sortKey === 'rent_desc')  list.sort((a, b) => (RENT_BY_NAME[b.name] || 0) - (RENT_BY_NAME[a.name] || 0));
         if (sortKey === 'region')     list.sort((a, b) => a.region.localeCompare(b.region, 'sv') || a.name.localeCompare(b.name, 'sv'));
         return list;
       }
@@ -310,6 +333,12 @@
               title="${pv.description || pv.name}">${pv.name}</a>`
         ).join('');
 
+        const rent = RENT_BY_NAME[m.name];
+        const rentHtml = rent
+          ? `<div class="muni-queue-label">${rent.toLocaleString('sv-SE')} kr/mån</div>
+             <div class="muni-bar" style="font-size:0.5rem;margin-top:0.1rem">35 kvm · SCB</div>`
+          : `<span class="no-providers">—</span>`;
+
         return `
           <div class="muni">
             <div class="muni-main">
@@ -320,6 +349,9 @@
               <div>
                 <div class="muni-queue-label">${queueLabel(m)}</div>
                 <div class="muni-bar">${queueBar(m.waitAvg)}</div>
+              </div>
+              <div class="muni-rent">
+                ${rentHtml}
               </div>
               <div class="muni-links">
                 ${links || '<span class="no-providers">—</span>'}
@@ -374,6 +406,8 @@
         <button class="sort-btn active" data-sort="name">Namn</button>
         <button class="sort-btn" data-sort="queue_asc">Kortast kö</button>
         <button class="sort-btn" data-sort="queue_desc">Längst kö</button>
+        <button class="sort-btn" data-sort="rent_asc">Lägst hyra</button>
+        <button class="sort-btn" data-sort="rent_desc">Högst hyra</button>
         <button class="sort-btn" data-sort="region">Län</button>`;
 
       const STOCKHOLM_SORT_BTNS = `
@@ -456,7 +490,7 @@
         render();
       });
 
-      render();
+      loadRents().then(() => render());
     </script>
   </body>
 </html>
