@@ -726,7 +726,7 @@ Ystad
         "Trots att det byggs nya bostäder har få råd att bo där. Medelhyran är idag 10 000 kr för en nyproducerad enrummare genom bostadsförmedlingen i Stockholm. SCB belyser detta problem med statistik där 60% av de unga som flyttat från Stockholm gör det på grund av bostadspriser.",
         "Det är natt och dag i olika delar av Sverige när det kommer till kötid på bostäder. Där det är längst kötid tar det i genomsnitt 20 år. Och på vissa ställen är kötiden NOLL.",
         "Den som vill ha en hyresrätt i storstadsregionerna får vara beredd att vänta i decennier. Men på många andra platser råder egentligen ingen bostadsbrist.",
-        "Hyresköer i storstäder som Stockholm och Göteborg kan kräva 20 respektive 10 års väntan, men på flera ställen i landet finns ingen bostadsbrist."
+        "En stor faktor och brist i det svenska bostadssystemet är frågan om kunskap, tillgångar samt kulturellt- och ekonomiskt kapital hos bostadssökande. Därför har vi samlat Svergies hyresrätter på en plats för att göra det tydligt hur bostadssituationen ser ut i olika delar av landet, och för att göra det lättare att hitta vägar till en bostad utanför de mest överhettade marknaderna."
       ];
 
       const extraParas = EXTRA_PARA_TEXTS.map((text, idx) => {
@@ -773,7 +773,7 @@ Ystad
       let textReveal = 0;
       let mergeBurstFired = false;
       const MERGE_START = 350;
-      const MERGE_RANGE = 550;
+      const MERGE_RANGE = 350;
       let merge2Target = 0;
       let merge2Progress = 0;
       let merge2BurstFired = false;
@@ -833,7 +833,7 @@ Ystad
         const a = (Math.sin(t * 0.17) + 1) * 0.5;       // ~37s period
         const b = (Math.sin(t * 0.41 + 2.1) + 1) * 0.5; // ~15s period
         const c = (Math.sin(t * 0.083 + 4.7) + 1) * 0.5; // ~76s period
-        const drift = 0.0008 + a * 0.0010 + b * 0.0005 + c * 0.0005;
+        const drift = 0.0016 + a * 0.0018 + b * 0.0010 + c * 0.0008;
         queueBurst(drift * dt * 60);
 
         // Ambient image trickle — accumulator avoids discrete pops
@@ -2023,7 +2023,7 @@ Ystad
         if (flowBand < 6) flowBand = 6;
         if (flowBand > HEIGHT - 7) flowBand = HEIGHT - 7;
 
-        mergeProgress += (mergeTarget - mergeProgress) * Math.min(1, dt * 1.2);
+        mergeProgress += (mergeTarget - mergeProgress) * Math.min(1, dt * 2.2);
 
         if (mergeProgress > 0.28 && !mergeBurstFired) {
           mergeBurstFired = true;
