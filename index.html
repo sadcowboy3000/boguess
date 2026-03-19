@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>ASCII Sweden</title>
     <style>
-:root {
+      :root {
         --bg: #000;
         --fg: #fff;
       }
@@ -121,7 +121,9 @@
         display: block;
         margin-top: 1.4em;
         font-size: 1.35em;
-        letter-spacing: 0.05em;
+        letter-spacing: normal;
+        word-spacing: normal;
+        line-height: 1.5;
         text-shadow: 0 0 14px rgba(255,255,255,0.3);
       }
 
@@ -163,10 +165,10 @@
 
       #game-btn {
         position: fixed;
-        bottom: 2.5rem;
+        bottom: 20vh;
         left: 50%;
         transform: translateX(-50%);
-        background: transparent;
+        background: #000;
         color: #fff;
         border: 1px solid rgba(255,255,255,0.5);
         font-family: "Courier New", Courier, monospace;
@@ -190,6 +192,26 @@
         background: rgba(255,255,255,0.08);
         border-color: rgba(255,255,255,0.9);
         text-shadow: 0 0 14px rgba(255,255,255,0.4);
+      }
+
+      /* ─── ASCII image background canvas ─────────────────── */
+      #ascii-bg-canvas {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      /* ─── Roads map canvas ──────────────────────────────── */
+      #roads-canvas {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 1;
       }
 
       /* ─── Side comparison diagrams (Ockelbo / Östermalm) ─ */
@@ -219,7 +241,7 @@
           width: min(60ch, 92vw);
         }
         #queue-wrap { bottom: 0.75rem; }
-        #game-btn   { bottom: 2rem; padding: 0.65rem 2.2rem; }
+        #game-btn   { bottom: 18vh; padding: 0.65rem 2.2rem; }
       }
 
       /* Phones (≤ 600px) */
@@ -247,7 +269,7 @@
           line-height: 1.4;
         }
         #game-btn {
-          bottom: 1rem;
+          bottom: 14vh;
           font-size: 0.82rem;
           padding: 0.7rem 1.6rem;
           min-height: 44px;
@@ -271,7 +293,7 @@
           top: 35%;
         }
         #queue-wrap  { bottom: 0.25rem; }
-        #game-btn    { bottom: 0.6rem; padding: 0.5rem 1.4rem; }
+        #game-btn    { bottom: 8vh; padding: 0.5rem 1.4rem; }
       }
 
       /* Large / 4K screens */
@@ -287,7 +309,9 @@
     </style>
   </head>
   <body>
+    <canvas id="ascii-bg-canvas" aria-hidden="true"></canvas>
     <canvas id="particle-layer" aria-hidden="true"></canvas>
+    <canvas id="roads-canvas"   aria-hidden="true"></canvas>
     <pre id="sweden" aria-label="Animated ASCII art of Sweden"></pre>
     <div id="merge-text">Vart ska jag bo?</div>
     <div id="queue-wrap">
@@ -302,7 +326,7 @@
       Räntorna är höga, bostadsköerna långa,
       andrahandsmarknaden snårig och bedragare
       utnyttjar desperata lägenhetsjägare.
-      <span class="last-q">Hur blev det så här, och var ska alla unga vuxna bo?</span>
+      <span class="last-q">Hur blev det så här,<br>och var ska alla unga vuxna bo?</span>
     </div>
 
     <script>
@@ -730,7 +754,8 @@ Ystad
       let mouseImageAccum = 0;
       let lastImageSpawnTime = -99;
       let mouseX = 0, mouseY = 0;
-      let scrollTotal = 0;
+      let scrollTotal  = 0;
+      let tickerOffset = 0;
       let scrollPhaseIdx = 0;
       let phaseGapAccum = 0;
       const PHASE_GAP = 400;
@@ -767,7 +792,9 @@ Ystad
         "images/c2b2f8431d41f6526dd3b4b64ceb4987.jpg",
         "images/dörr.jpg",
         "images/fult-flerbostadshus-på-kanten-av-en-industriell-stad-100244316.jpg.webp",
-        "images/slat_valnot_TR342sakerhetsdorr-3-1.jpg.webp"
+        "images/slat_valnot_TR342sakerhetsdorr-3-1.jpg.webp",
+        "images/ascii-art.png",
+        "images/ascii-art-2.png"
       ];
       const loadedImages = IMAGE_SOURCES.map((src) => {
         const img = new Image();
@@ -955,7 +982,7 @@ Ystad
         }
       }, { passive: true });
 
-      window.addEventListener("resize", () => { formFontSize = 0; resizeCanvas(); }, { passive: true });
+      window.addEventListener("resize", () => { formFontSize = 0; resizeCanvas(); resizeRoadsCvs(); resizeAsciiBgCvs(); }, { passive: true });
       resizeCanvas();
 
       const halfProfile = [
@@ -1337,9 +1364,440 @@ Ystad
         return { ptA, ptB };
       }
 
+      // ─── Roads map ("200 000 unga…" slide) ──────────────────
+      const roadsCvs = document.getElementById("roads-canvas");
+      const roadsCtx = roadsCvs.getContext("2d");
+      let   roadsVis = 0; // lerped 0→1 when slide is active
+
+      // bend1/bend2: perpendicular offsets (px) at 30% and 70% of road length
+      // dist = fraction of max edge distance (1.0 = exactly hits viewport edge)
+      const CITY_ROADS = [
+        { label: "Stockholm",   angle:   8, dist: 0.88, bend1:  150, bend2: -120 },
+        { label: "Uppsala",     angle:  22, dist: 0.82, bend1:  -90, bend2:   65 },
+        { label: "Gävle",       angle:  38, dist: 0.86, bend1:   95, bend2: -140 },
+        { label: "Norrtälje",   angle:  52, dist: 0.80, bend1: -110, bend2:   80 },
+        { label: "Södertälje",  angle:  68, dist: 0.78, bend1:  120, bend2:  -85 },
+        { label: "Eskilstuna",  angle:  82, dist: 0.76, bend1:  -80, bend2:  110 },
+        { label: "Visby",       angle:  98, dist: 0.84, bend1:  130, bend2:  -95 },
+        { label: "Nyköping",    angle: 112, dist: 0.80, bend1: -115, bend2:   90 },
+        { label: "Norrköping",  angle: 126, dist: 0.84, bend1:  100, bend2: -130 },
+        { label: "Kalmar",      angle: 138, dist: 0.82, bend1:  -85, bend2:  110 },
+        { label: "Linköping",   angle: 150, dist: 0.80, bend1:  140, bend2:  -80 },
+        { label: "Västervik",   angle: 118, dist: 0.78, bend1:  -95, bend2:  120 },
+        { label: "Karlskrona",  angle: 142, dist: 0.86, bend1:  110, bend2:  -75 },
+        { label: "Växjö",       angle: 158, dist: 0.82, bend1: -120, bend2:   85 },
+        { label: "Jönköping",   angle: 166, dist: 0.80, bend1:  105, bend2: -110 },
+        { label: "Kristianstad",angle: 174, dist: 0.84, bend1:  -75, bend2:  130 },
+        { label: "Malmö",       angle: 182, dist: 0.88, bend1:  125, bend2:  -90 },
+        { label: "Helsingborg", angle: 192, dist: 0.82, bend1:  -95, bend2:  115 },
+        { label: "Halmstad",    angle: 204, dist: 0.84, bend1:   90, bend2: -120 },
+        { label: "Varberg",     angle: 214, dist: 0.80, bend1: -110, bend2:   75 },
+        { label: "Göteborg",    angle: 224, dist: 0.90, bend1:  135, bend2: -100 },
+        { label: "Borås",       angle: 236, dist: 0.82, bend1:  -80, bend2:  125 },
+        { label: "Uddevalla",   angle: 248, dist: 0.84, bend1:  100, bend2:  -85 },
+        { label: "Trollhättan", angle: 258, dist: 0.82, bend1: -125, bend2:   95 },
+        { label: "Skövde",      angle: 270, dist: 0.80, bend1:   85, bend2: -110 },
+        { label: "Örebro",      angle: 282, dist: 0.82, bend1: -100, bend2:  130 },
+        { label: "Karlstad",    angle: 294, dist: 0.86, bend1:  115, bend2:  -85 },
+        { label: "Lidköping",   angle: 278, dist: 0.78, bend1:  -90, bend2:  105 },
+        { label: "Västerås",    angle: 306, dist: 0.80, bend1:   80, bend2: -120 },
+        { label: "Falun",       angle: 318, dist: 0.82, bend1: -115, bend2:   90 },
+        { label: "Östersund",   angle: 328, dist: 0.86, bend1:   95, bend2: -100 },
+        { label: "Sundsvall",   angle: 338, dist: 0.88, bend1: -130, bend2:  110 },
+        { label: "Härnösand",   angle: 346, dist: 0.84, bend1:  110, bend2:  -75 },
+        { label: "Umeå",        angle: 354, dist: 0.90, bend1:  -85, bend2:  120 },
+        { label: "Skellefteå",  angle:   2, dist: 0.92, bend1:  120, bend2:  -90 },
+        { label: "Luleå",       angle:  15, dist: 0.94, bend1:  -70, bend2:  100 },
+        { label: "Kiruna",      angle: 359, dist: 0.96, bend1:  100, bend2:  -65 },
+      ];
+
+      function resizeRoadsCvs() {
+        const d = window.devicePixelRatio || 1;
+        roadsCvs.width  = Math.floor(window.innerWidth  * d);
+        roadsCvs.height = Math.floor(window.innerHeight * d);
+        roadsCvs.style.width  = window.innerWidth  + "px";
+        roadsCvs.style.height = window.innerHeight + "px";
+      }
+      resizeRoadsCvs();
+
+      // Distance from (ox,oy) to the nearest viewport edge in direction rad
+      function edgeDist(ox, oy, rad, W, H) {
+        const margin = 14;
+        const dx = Math.cos(rad), dy = Math.sin(rad);
+        const ts = [];
+        if (Math.abs(dx) > 1e-6) {
+          const ta = (margin - ox) / dx, tb2 = (W - margin - ox) / dx;
+          if (ta > 1) ts.push(ta);
+          if (tb2 > 1) ts.push(tb2);
+        }
+        if (Math.abs(dy) > 1e-6) {
+          const ta = (margin - oy) / dy, tb2 = (H - margin - oy) / dy;
+          if (ta > 1) ts.push(ta);
+          if (tb2 > 1) ts.push(tb2);
+        }
+        return ts.length ? Math.min(...ts) : 400;
+      }
+
+      // Sample a cubic bezier at parameter u ∈ [0,1]
+      function cubicBez(u, x0, y0, x1, y1, x2, y2, x3, y3) {
+        const mu = 1 - u;
+        return {
+          x: mu*mu*mu*x0 + 3*mu*mu*u*x1 + 3*mu*u*u*x2 + u*u*u*x3,
+          y: mu*mu*mu*y0 + 3*mu*mu*u*y1 + 3*mu*u*u*y2 + u*u*u*y3,
+        };
+      }
+
+      // Catmull-Rom spline interpolation for organic wobbly roads
+      function catmullRomPt(t, p0, p1, p2, p3) {
+        const t2 = t*t, t3 = t2*t;
+        return 0.5*(
+          (2*p1) +
+          (-p0+p2)*t +
+          (2*p0 - 5*p1 + 4*p2 - p3)*t2 +
+          (-p0 + 3*p1 - 3*p2 + p3)*t3
+        );
+      }
+
+      function drawRoads(dt, t) {
+        const shouldShow = (scrollPhaseIdx === 2 || scrollPhaseIdx === 3)
+          && !pendingFormTransition && isFormationSettled();
+        roadsVis += ((shouldShow ? 1 : 0) - roadsVis) * Math.min(1, dt * 0.20);
+
+        const d = window.devicePixelRatio || 1;
+        roadsCtx.setTransform(d, 0, 0, d, 0, 0);
+        roadsCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        if (roadsVis < 0.01) return;
+
+        const W     = window.innerWidth;
+        const H     = window.innerHeight;
+        const spans = Array.from(revealTextEl.querySelectorAll(".rv"));
+        const tb    = revealTextEl.getBoundingClientRect();
+        const baseA = roadsVis * 0.72;
+        // Fixed resolution — tip advances fractionally each frame (no integer stepping)
+        const RES   = 100;
+
+        CITY_ROADS.forEach((road, i) => {
+          // stagger_max = 0.35, multiplier = 1/(1-0.35) ≈ 1.54 → last road reaches 1 when roadsVis=1
+          const stagger  = (i / CITY_ROADS.length) * 0.35;
+          const roadProg = Math.max(0, Math.min(1, (roadsVis - stagger) * (1 / (1 - 0.35))));
+          if (roadProg <= 0) return;
+
+          const spanIdx = spans.length > 0
+            ? Math.floor((i / CITY_ROADS.length) * spans.length) : 0;
+          const sr = spans.length > 0 ? spans[spanIdx].getBoundingClientRect() : tb;
+          const ox = sr.left + sr.width  * 0.5;
+          const oy = sr.top  + sr.height * 0.5;
+
+          const rad     = (road.angle - 90) * Math.PI / 180;
+          const perp    = rad + Math.PI / 2;
+          const fullLen = edgeDist(ox, oy, rad, W, H) * road.dist;
+
+          // ── Organic wobbly road via Catmull-Rom waypoints ──
+          // Build N waypoints along the road direction, each nudged perpendicularly
+          // with a sinusoidal wobble so the path looks like a real winding road.
+          const N_WP  = 8;
+          const amp   = (Math.abs(road.bend1) + Math.abs(road.bend2)) * 1.1;
+          const freq  = 1.6 + (i % 4) * 0.35;   // slight per-road frequency variation
+          const phase = i * 1.23 + 0.6;          // unique phase so no two roads look the same
+          // Slow gentle undulation over time so roads breathe slightly
+          const timeDrift = 0.06 * Math.sin(t * 0.25 + i * 0.71);
+
+          const wpts = [];
+          for (let wi = 0; wi < N_WP; wi++) {
+            const frac = wi / (N_WP - 1);
+            const bx = ox + Math.cos(rad) * fullLen * frac;
+            const by = oy + Math.sin(rad) * fullLen * frac;
+            // Fade wobble to zero at start and end so line connects cleanly
+            const envelope = Math.sin(frac * Math.PI);
+            const wobble   = Math.sin(frac * Math.PI * freq + phase + timeDrift) * amp * envelope;
+            wpts.push({
+              x: bx + Math.cos(perp) * wobble,
+              y: by + Math.sin(perp) * wobble,
+            });
+          }
+
+          // Sample the Catmull-Rom spline up to roadProg
+          const totalSegs = N_WP - 1;
+          const pts = [];
+          for (let s = 0; s <= RES; s++) {
+            const u      = (s / RES) * roadProg * totalSegs;
+            const segIdx = Math.min(Math.floor(u), totalSegs - 1);
+            const segT   = u - segIdx;
+            const p0 = wpts[Math.max(0, segIdx - 1)];
+            const p1 = wpts[segIdx];
+            const p2 = wpts[Math.min(N_WP - 1, segIdx + 1)];
+            const p3 = wpts[Math.min(N_WP - 1, segIdx + 2)];
+            pts.push({
+              x: catmullRomPt(segT, p0.x, p1.x, p2.x, p3.x),
+              y: catmullRomPt(segT, p0.y, p1.y, p2.y, p3.y),
+            });
+          }
+
+          roadsCtx.save();
+          roadsCtx.lineJoin = "round";
+          roadsCtx.lineCap  = "round";
+          roadsCtx.shadowBlur = 0;
+
+          // Solid road line
+          roadsCtx.globalAlpha = baseA * 0.80;
+          roadsCtx.strokeStyle = "#b0b0b0";
+          roadsCtx.lineWidth   = 2.0;
+          roadsCtx.beginPath();
+          pts.forEach((p, idx) => idx === 0 ? roadsCtx.moveTo(p.x, p.y) : roadsCtx.lineTo(p.x, p.y));
+          roadsCtx.stroke();
+
+          // Centre dashes
+          roadsCtx.globalAlpha = baseA * 0.38;
+          roadsCtx.strokeStyle = "#fff";
+          roadsCtx.lineWidth   = 0.7;
+          roadsCtx.setLineDash([6, 11]);
+          roadsCtx.beginPath();
+          pts.forEach((p, idx) => idx === 0 ? roadsCtx.moveTo(p.x, p.y) : roadsCtx.lineTo(p.x, p.y));
+          roadsCtx.stroke();
+          roadsCtx.setLineDash([]);
+          roadsCtx.restore();
+
+          // City label at endpoint
+          if (roadProg > 0.85) {
+            const appear = Math.min(1, (roadProg - 0.85) / 0.15);
+            const endPt  = pts[pts.length - 1];
+            const lx = endPt.x + Math.cos(rad) * 11;
+            const ly = endPt.y + Math.sin(rad) * 11;
+            roadsCtx.save();
+            roadsCtx.shadowBlur   = 0;
+            roadsCtx.globalAlpha  = appear * roadsVis * 0.80;
+            roadsCtx.fillStyle    = "#bbb";
+            roadsCtx.font = `${Math.max(8, Math.min(10, W / 130))}px "Courier New", Courier, monospace`;
+            roadsCtx.textAlign    = "center";
+            roadsCtx.textBaseline = "middle";
+            roadsCtx.fillText(road.label, lx, ly);
+            roadsCtx.restore();
+          }
+        });
+      }
+
+      // ─── ASCII image background ("Hyresköer" slide) ─────────
+      const asciiBgCvs = document.getElementById("ascii-bg-canvas");
+      const asciiBgCtx = asciiBgCvs.getContext("2d");
+      let asciiBgVis   = 0;
+      let asciiBgIdx   = 0;
+      let asciiBgTimer = 0;
+      const ASCII_CYCLE  = 5;   // seconds per image
+      const ASCII_FS     = 8;   // font size px
+      const ASCII_MAP    = ' .,:;=+|oxO#@';
+      const ASCII_GLITCH = '01!#%[]\\/?@$*ABCDabcd';
+
+      // Measure exact monospace char size once
+      const _asciiMeasCtx = document.createElement("canvas").getContext("2d");
+      _asciiMeasCtx.font = `${ASCII_FS}px "Courier New", Courier, monospace`;
+      const ASCII_CW = _asciiMeasCtx.measureText("M").width;
+      const ASCII_LH = ASCII_FS * 1.28;
+
+      let asciiBgImages = [];   // loaded HTMLImageElements
+      let asciiBgGrids  = [];   // { cols, rows, rowStrs, rowArrs }
+
+      function buildAsciiGrid(img) {
+        const cols = Math.max(1, Math.floor(window.innerWidth  / ASCII_CW));
+        const rows = Math.max(1, Math.floor(window.innerHeight / ASCII_LH));
+        const oc   = document.createElement("canvas");
+        oc.width   = cols; oc.height = rows;
+        const ox   = oc.getContext("2d");
+        ox.drawImage(img, 0, 0, cols, rows);
+        const px   = ox.getImageData(0, 0, cols, rows).data;
+        const rowStrs = [], rowArrs = [];
+        for (let r = 0; r < rows; r++) {
+          let s = ""; const arr = [];
+          for (let c = 0; c < cols; c++) {
+            const i = (r * cols + c) * 4;
+            const b = (px[i] * 0.299 + px[i+1] * 0.587 + px[i+2] * 0.114) / 255;
+            const ch = ASCII_MAP[Math.min(ASCII_MAP.length - 1, Math.floor(b * ASCII_MAP.length))];
+            s += ch; arr.push(ch);
+          }
+          rowStrs.push(s); rowArrs.push(arr);
+        }
+        return { cols, rows, rowStrs, rowArrs };
+      }
+
+      // Load every image and compute its ASCII grid
+      IMAGE_SOURCES.forEach(src => {
+        const img = new Image();
+        img.onload = () => {
+          asciiBgImages.push(img);
+          asciiBgGrids.push(buildAsciiGrid(img));
+        };
+        img.src = src;
+      });
+
+      function resizeAsciiBgCvs() {
+        const d = window.devicePixelRatio || 1;
+        asciiBgCvs.width  = Math.floor(window.innerWidth  * d);
+        asciiBgCvs.height = Math.floor(window.innerHeight * d);
+        asciiBgCvs.style.width  = window.innerWidth  + "px";
+        asciiBgCvs.style.height = window.innerHeight + "px";
+        // Recompute grids for the new viewport
+        asciiBgGrids = asciiBgImages.map(buildAsciiGrid);
+      }
+      resizeAsciiBgCvs();
+
+      function drawAsciiBg(dt, t) {
+        const shouldShow = scrollPhaseIdx >= 8 && !pendingFormTransition && isFormationSettled();
+        asciiBgVis += ((shouldShow ? 1 : 0) - asciiBgVis) * Math.min(1, dt * 0.55);
+
+        const d = window.devicePixelRatio || 1;
+        asciiBgCtx.setTransform(d, 0, 0, d, 0, 0);
+        asciiBgCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        if (asciiBgVis < 0.01 || asciiBgGrids.length === 0) return;
+
+        // Advance image cycle
+        asciiBgTimer += dt;
+        if (asciiBgTimer >= ASCII_CYCLE) {
+          asciiBgTimer -= ASCII_CYCLE;
+          asciiBgIdx = (asciiBgIdx + 1) % asciiBgGrids.length;
+        }
+
+        const imgIdx  = asciiBgIdx % asciiBgGrids.length;
+        const g       = asciiBgGrids[imgIdx];
+        const srcImg  = asciiBgImages[imgIdx];
+        const cycleT  = asciiBgTimer / ASCII_CYCLE;
+        // Fade image in/out at cycle edges
+        const cycFade = Math.min(1, cycleT / 0.18) * (1 - Math.max(0, (cycleT - 0.82) / 0.18));
+
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+
+        asciiBgCtx.save();
+
+        // ── Layer 1: grayscale photo ──────────────────────────
+        if (srcImg) {
+          asciiBgCtx.globalAlpha = asciiBgVis * cycFade * 0.30;
+          asciiBgCtx.filter      = "grayscale(1) brightness(0.65)";
+          asciiBgCtx.drawImage(srcImg, 0, 0, W, H);
+          asciiBgCtx.filter      = "none";
+        }
+
+        // ── Layer 2: ASCII — organic per-row wave ─────────────
+        asciiBgCtx.font         = `${ASCII_FS}px "Courier New", Courier, monospace`;
+        asciiBgCtx.textAlign    = "left";
+        asciiBgCtx.textBaseline = "top";
+        asciiBgCtx.fillStyle    = "#fff";
+
+        for (let r = 0; r < g.rows; r++) {
+          // Each row breathes on its own slow sine — creates a rolling organic wave
+          const rowWave  = Math.sin(t * 0.55 + r * 0.38) * 0.5 + 0.5;       // 0→1
+          const rowShift = Math.sin(t * 0.28 + r * 0.19) * 0.5 + 0.5;       // 0→1
+          const rowAlpha = asciiBgVis * cycFade * (0.18 + rowWave * 0.26);   // 0.18–0.44
+
+          // Build a row string that can shift slightly along the ASCII_MAP
+          let rowStr = "";
+          for (let c = 0; c < g.cols; c++) {
+            const base = g.rowArrs[r][c];
+            if (base === " ") { rowStr += " "; continue; }
+            const baseIdx  = ASCII_MAP.indexOf(base);
+            // Slow spatial wave nudges each cell ±1 char in the map
+            const nudge = Math.sin(t * 0.4 + r * 0.31 + c * 0.17) * rowShift;
+            const newIdx = Math.max(0, Math.min(ASCII_MAP.length - 1,
+              Math.round(baseIdx + nudge)));
+            rowStr += ASCII_MAP[newIdx];
+          }
+
+          asciiBgCtx.globalAlpha = rowAlpha;
+          asciiBgCtx.fillText(rowStr, 0, r * ASCII_LH);
+        }
+
+        asciiBgCtx.restore();
+      }
+
+      // ─── Glitching ticker banderoll ("Vart ska jag bo?") ────
+      const TICKER_BASE  = "VART SKA JAG BO?   ";
+      const TICKER_SPEED = 52;   // px / second
+      const GLITCH_POOL  = "01!#%[]<>{}|\\/?01ABCDEFabcdef01@#!01";
+
+      function drawTicker(dt, t) {
+        const alpha = (1 - textReveal) * 0.13;   // vague — low base opacity, denser rows so slightly less
+        if (alpha < 0.005) return;
+
+        tickerOffset += TICKER_SPEED * dt;
+
+        const W    = window.innerWidth;
+        const H    = window.innerHeight;
+        const rows = Math.max(40, Math.min(80, Math.floor(H / 13)));
+        const gap  = H / rows;
+        const fs   = Math.max(7, Math.min(9, H / 100));
+        const fnt  = `${fs}px "Courier New", Courier, monospace`;
+
+        particleCtx.save();
+        particleCtx.font         = fnt;
+        particleCtx.textAlign    = "left";
+        particleCtx.textBaseline = "middle";
+
+        const unitW = particleCtx.measureText(TICKER_BASE).width;
+        if (unitW <= 0) { particleCtx.restore(); return; }
+
+        // Fixed char width (Courier New is monospace)
+        const charW     = unitW / TICKER_BASE.length;
+        const numPieces = Math.ceil(W / unitW) + 3;
+
+        for (let row = 0; row < rows; row++) {
+          const y      = gap * (row + 1);
+          const isLTR  = row % 2 === 0;
+          // Organic speed: each row has a unique slow sine drift on top of a base
+          const rowSeed = row * 1.618 + 0.5;
+          const speedBase = 0.45 + (row / rows) * 0.35;
+          const speedWave = 0.22 * Math.sin(t * 0.18 + rowSeed * 2.1);
+          const speed  = speedBase + speedWave;
+          const rowOff = (tickerOffset * speed) % unitW;
+
+          // Organic per-row breathing with different periods
+          const breath = 0.65 + 0.35 * Math.sin(t * (0.7 + (row % 7) * 0.15) + row * 0.97);
+          particleCtx.fillStyle   = "#fff";
+          particleCtx.globalAlpha = alpha * breath;
+
+          // ── 1. Draw the clean base text across the full row ──
+          if (isLTR) {
+            const startX = rowOff - unitW;
+            for (let i = 0; i < numPieces; i++) {
+              particleCtx.fillText(TICKER_BASE, startX + i * unitW, y);
+            }
+          } else {
+            const startX = W - rowOff;
+            for (let i = 0; i < numPieces; i++) {
+              particleCtx.fillText(TICKER_BASE, startX - i * unitW, y);
+            }
+          }
+
+          // ── 2. Overdraw individual glitch characters only ────
+          // Probability surges on a slow sine → feels like sporadic data noise
+          const glitchBurst = Math.max(0, Math.sin(t * 1.1 + row * 1.7));
+          const glitchRate  = 0.001 + 0.006 * glitchBurst;
+
+          // Glitch chars are drawn brighter so they pop against the dim base
+          particleCtx.globalAlpha = Math.min(1, alpha * breath * 2.2);
+
+          for (let i = 0; i < numPieces; i++) {
+            const baseX = isLTR
+              ? (rowOff - unitW) + i * unitW
+              : (W - rowOff)    - i * unitW;
+
+            for (let ci = 0; ci < TICKER_BASE.length; ci++) {
+              if (TICKER_BASE[ci] === " ") continue;
+              if (Math.random() < glitchRate) {
+                const gch = GLITCH_POOL[Math.floor(Math.random() * GLITCH_POOL.length)];
+                particleCtx.fillText(gch, baseX + ci * charW, y);
+              }
+            }
+          }
+        }
+
+        particleCtx.globalAlpha = 1;
+        particleCtx.restore();
+      }
+
       function drawParticles(dt, t) {
         particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         particleCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+        // Draw glitching ticker behind all particles
+        drawTicker(dt, t);
         particleCtx.font = `${charSizePx}px "Courier New", Courier, monospace`;
         particleCtx.textAlign = "center";
         particleCtx.textBaseline = "middle";
@@ -1564,11 +2022,22 @@ Ystad
         const queueVisible = (scrollPhaseIdx === 6 || scrollPhaseIdx === 7)
           && !pendingFormTransition && isFormationSettled();
         updateQueueVisibility(queueVisible);
+        if (queueRevealActive && window.__queueData) {
+          queueRevealProgress = Math.min(1, queueRevealProgress + dt * 0.38);
+          if (queueRevealProgress >= 1) queueRevealActive = false;
+          drawQueueChart();
+        }
 
         // Side diagrams — Ockelbo vs Östermalm (extraParas[0] slide, scrollPhaseIdx 4–5)
         const sideDiagramsShow = (scrollPhaseIdx === 4 || scrollPhaseIdx === 5)
           && !pendingFormTransition && isFormationSettled();
         updateSideDiagrams(sideDiagramsShow, t);
+
+        // Roads map — visible on "200 000 unga" slide (scrollPhaseIdx 2–3)
+        drawRoads(dt, t);
+
+        // ASCII image background — visible on "Hyresköer" slide (scrollPhaseIdx 8)
+        drawAsciiBg(dt, t);
 
         injectAmbientBurst(dt, t);
 
@@ -1607,14 +2076,17 @@ Ystad
       const queueTip    = document.getElementById("queue-tooltip");
 
       const Q_MAX   = 18;    // axis max (years)
-      const Q_DOT_R = 1.0;   // dot radius px (small to allow 119 dots to stack)
+      const Q_DOT_R = 2.2;   // dot radius px
       const Q_GAP   = 0.3;   // min gap between dots
       let Q_M       = { left: 64, right: 64, top: 28, bottom: 36 };
 
-      let queueLayout    = null;   // computed dot positions
-      let queueDirty     = true;   // needs (re)draw
-      let queueMouseLX   = -999;   // logical mouse coords
-      let queueMouseLY   = -999;
+      let queueLayout         = null;
+      let queueDirty          = true;
+      let queueMouseLX        = -999;
+      let queueMouseLY        = -999;
+      let queueRevealProgress = 0;    // 0→1 entrance animation
+      let queueRevealActive   = false;
+      let queueDrawT          = 0;   // accumulated time for idle drift
 
       function queueLogX(waitAvg, W) {
         return Q_M.left + (Math.min(waitAvg, Q_MAX) / Q_MAX) * (W - Q_M.left - Q_M.right);
@@ -1723,20 +2195,34 @@ Ystad
           }
         }
 
-        // Dots
-        for (const d of queueLayout) {
-          const t     = Math.min(d.m.waitAvg / Q_MAX, 1);
+        // Dots — fade in with a staggered wave, then static
+        queueLayout.forEach((d, i) => {
+          const tVal  = Math.min(d.m.waitAvg / Q_MAX, 1);
           const isHov = d === hovered;
-          const alpha = isHov ? 1 : (0.55 + t * 0.45);
-          const r     = isHov ? Q_DOT_R * 4 : Q_DOT_R;
+
+          const nx    = (d.x - Q_M.left) / Math.max(1, chartW);
+          const hash1 = Math.sin(i * 2.3999) * 0.5 + 0.5;   // 0→1 quasi-random
+
+          // Wave sweeps left → right with a little per-dot scatter
+          const delay   = nx * 0.55 + hash1 * 0.20;
+          const dur     = 0.25 + hash1 * 0.15;
+          const dotProg = Math.max(0, Math.min(1, (queueRevealProgress - delay) / dur));
+          if (dotProg <= 0) return;
+
+          // Simple ease-out — dot fades and scales up to its final position, no movement
+          const eased = 1 - Math.pow(1 - dotProg, 3);
+
+          const baseR = isHov ? Q_DOT_R * 4 : Q_DOT_R;
+          const r     = baseR * Math.min(1, dotProg * 4);
+          const alpha = (isHov ? 1 : (0.50 + tVal * 0.50)) * eased;
 
           queueCtx2.beginPath();
-          queueCtx2.arc(d.x, d.y, r, 0, Math.PI * 2);
+          queueCtx2.arc(d.x, d.y, Math.max(0.3, r), 0, Math.PI * 2);
           queueCtx2.fillStyle = `rgba(255,255,255,${alpha})`;
           if (isHov) { queueCtx2.shadowColor = "#fff"; queueCtx2.shadowBlur = 10; }
           queueCtx2.fill();
           queueCtx2.shadowBlur = 0;
-        }
+        });
 
         // Tooltip
         if (hovered) {
@@ -2014,11 +2500,15 @@ Ystad
           queueLayout = null;
           queueWrap.classList.add("visible");
           queueDirty = true;
+          queueRevealProgress = 0;
+          queueRevealActive   = true;
         } else if (!show && isVis) {
           queueWrap.classList.remove("visible");
           queueTip.style.display = "none";
           queueLayout = null;
-          queueDirty = true;
+          queueDirty  = true;
+          queueRevealActive   = false;
+          queueRevealProgress = 0;
         }
         if (show && queueDirty && window.__queueData) {
           queueDirty = false;
