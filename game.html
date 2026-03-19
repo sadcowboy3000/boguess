@@ -1,0 +1,1949 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sweden GeoGuessr-Style</title>
+    <style>
+      @font-face {
+        font-family: 'ABCConnect';
+        src: url('assets/ABCConnect-Flat-Trial.otf') format('opentype');
+        font-weight: normal;
+        font-style: normal;
+      }
+
+      :root {
+        --bg0: #05080f;
+        --bg1: #0a1322;
+        --panel: rgba(8, 16, 30, 0.85);
+        --line: rgba(255, 255, 255, 0.14);
+        --text: #ffffff;
+        --muted: rgba(255, 255, 255, 0.55);
+        --accent: #5bc0ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: radial-gradient(circle at 12% 18%, #11213b 0%, var(--bg1) 33%, var(--bg0) 100%);
+        color: #fff;
+        font-family: 'ABCConnect', "Segoe UI", Tahoma, sans-serif;
+      }
+
+      .topbar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.65rem 1rem;
+        z-index: 30;
+        pointer-events: none;
+      }
+
+      .score {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: rgba(3, 6, 12, 0.6);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.35rem 0.8rem;
+        pointer-events: auto;
+      }
+
+      .score strong {
+        color: #fff;
+      }
+
+      .link {
+        pointer-events: auto;
+        color: var(--text);
+        text-decoration: none;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.35rem 0.8rem;
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 0.86rem;
+      }
+
+      .layout {
+        position: relative;
+        height: 100vh;
+        width: 100vw;
+      }
+
+      #pano {
+        position: absolute;
+        inset: 0;
+        height: 100%;
+        width: 100%;
+      }
+
+      .bottom-ui {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 60;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+      }
+
+      #map-actions {
+        padding: 0 14px 8px;
+        pointer-events: auto;
+      }
+
+      #map-wrap {
+        position: relative;
+        width: 100%;
+        height: 220px;
+        border-radius: 14px 14px 0 0;
+        overflow: hidden;
+        box-shadow: 0 -6px 32px rgba(0, 0, 0, 0.65);
+        pointer-events: auto;
+        user-select: none;
+      }
+
+      #map {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        inset: 0;
+        pointer-events: auto;
+      }
+
+      #guess-btn,
+      #next-btn {
+        background: #fff;
+        color: #000;
+        font-weight: 700;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 36px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background 0.12s, transform 0.1s;
+        letter-spacing: 0.01em;
+      }
+
+      #guess-btn:hover,
+      #next-btn:hover {
+        background: #e8e8e8;
+      }
+
+      #guess-btn:active,
+      #next-btn:active {
+        transform: scale(0.97);
+      }
+
+      #guess-btn:disabled,
+      #next-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      #stats-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        background: linear-gradient(
+          to bottom,
+          rgba(5, 10, 20, 0.97) 0%,
+          rgba(5, 10, 20, 0.18) 52%,
+          rgba(5, 10, 20, 0.92) 100%
+        );
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        padding: 6vh 1.5rem calc(220px + 60px);
+        overflow-y: auto;
+      }
+
+      .stats-city-name {
+        font-size: clamp(2rem, 6vw, 4rem);
+        font-weight: 700;
+        color: #fff;
+        flex-shrink: 0;
+        text-align: center;
+        letter-spacing: 0.02em;
+        text-shadow: 0 2px 24px rgba(0, 0, 0, 0.9);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+        line-height: 1.15;
+      }
+
+      .stats-city-sub {
+        font-size: clamp(0.85rem, 1.8vw, 1.1rem);
+        color: rgba(255, 255, 255, 0.55);
+        text-align: center;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-top: 0.2rem;
+        text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+      }
+
+      .stats-result {
+        margin-top: 1.1rem;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        text-align: center;
+        text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
+      }
+
+      .stats-result-distance {
+        font-size: clamp(1.1rem, 2.5vw, 1.8rem);
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: 0.01em;
+        text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
+      }
+
+      .stats-result-points,
+      .stats-result-points-label {
+        display: none;
+      }
+
+      #stats-chart {
+        padding: 1.8rem 2.4rem 1.4rem;
+      }
+
+      .staple-chart {
+        margin-top: 0;
+        display: flex;
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 2.5rem;
+        padding-bottom: 0.1rem;
+      }
+
+      .staple-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.28rem;
+      }
+
+      .staple-value {
+        font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+        font-weight: 700;
+        color: #fff;
+        text-shadow: none;
+        letter-spacing: 0.01em;
+      }
+
+      .staple-bar-track {
+        width: 72px;
+        height: 200px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 2px 2px 0 0;
+        display: flex;
+        align-items: flex-end;
+        overflow: hidden;
+      }
+
+      .staple-bar-fill {
+        width: 100%;
+        background: linear-gradient(to top, #888, #fff);
+        border-radius: 0;
+        transition: height 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+        height: 0;
+        box-shadow: none;
+        animation: barGlow 2.4s ease-in-out infinite;
+        animation-delay: 2.8s;
+      }
+
+      .staple-label {
+        font-size: clamp(0.65rem, 1.3vw, 0.78rem);
+        color: #fff;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        text-align: center;
+      }
+
+      .stats-no-data {
+        margin-top: auto;
+        color: var(--muted);
+        font-size: 0.75rem;
+        text-align: center;
+      }
+
+      @keyframes statsFadeDown {
+        from { opacity: 0; transform: translateY(-14px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes statsFadeUp {
+        from { opacity: 0; transform: translateY(22px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes barGlow {
+        0%, 100% { filter: brightness(0.8); }
+        50%       { filter: brightness(1.35); }
+      }
+
+      #ascii-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+      }
+
+      #ascii-canvas { display: none; }
+
+      /* ── Housing providers row ─────────────────────────────── */
+      #stats-providers {
+        width: 100%;
+        max-width: 640px;
+        margin-top: 1rem;
+        background: linear-gradient(to bottom, rgba(255, 255, 255, 0.407), rgba(255, 255, 255, 0.542));
+        border-radius: 1px;
+        border-style: solid;
+        border-width: 1px;
+        border-color: rgb(255, 255, 255);
+        padding: 1rem 1.2rem;
+      }
+
+      .providers-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: rgba(255, 255, 255, 0.841);
+        margin-bottom: 0.7rem;
+        text-shadow: #000 0px 1px 3px;
+      }
+
+      .providers-row {
+        display: flex;
+        flex-direction: row;
+        gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+      }
+
+      .provider-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 10px 8px;
+        background: #111;
+        border: none;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #fff;
+        min-width: 82px;
+        max-width: 92px;
+        flex-shrink: 0;
+        transition: background 0.15s;
+      }
+
+      .provider-card:hover {
+        background: #2a2a2a;
+      }
+
+      .provider-logo {
+        width: 36px;
+        height: 36px;
+        border-radius: 4px;
+        object-fit: contain;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 4px;
+      }
+
+      .provider-name {
+        font-size: 10px;
+        text-align: center;
+        color: #fff;
+        width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.2;
+      }
+
+      .provider-badge {
+        font-size: 9px;
+        padding: 2px 6px;
+        border-radius: 99px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+
+      .provider-badge.queue {
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      .provider-badge.direct {
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      @media (max-width: 600px) {
+        #map-wrap {
+          height: 160px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="topbar">
+      <a class="link" href="index.html">← Tillbaka</a>
+      <div class="score">Runda <strong id="round">0</strong> · Poäng <strong id="score">0 p</strong></div>
+    </div>
+
+    <div class="layout">
+      <div id="pano"></div>
+      <canvas id="ascii-overlay"></canvas>
+    </div>
+    <canvas id="ascii-canvas"></canvas>
+
+    <div id="stats-overlay">
+      <div class="stats-city-name" id="stats-city-name"></div>
+      <div id="stats-chart"></div>
+      <div id="stats-providers"></div>
+    </div>
+
+    <div id="status" style="display:none" aria-live="polite"></div>
+    <div class="bottom-ui">
+      <div id="map-actions">
+        <button id="guess-btn" type="button">Gissa</button>
+        <button id="next-btn" type="button" style="display:none">Nästa runda</button>
+      </div>
+      <div id="map-wrap">
+        <div id="map"></div>
+      </div>
+    </div>
+    <script type="module">
+      import { getQueueInfo } from './sweden-queue.js';
+      import { getNeighbourhoodByCoords, getAllNeighbourhoods } from './stockholm-queue.js';
+      import { getProviders } from './sweden-housing-providers.js';
+
+      let MUNICIPALITIES = [];
+
+      const STATUS_EL = document.getElementById("status");
+      const ROUND_EL = document.getElementById("round");
+      const SCORE_EL = document.getElementById("score");
+      const GUESS_BTN = document.getElementById("guess-btn");
+      const NEXT_BTN = document.getElementById("next-btn");
+      const MAP_WRAP = document.getElementById("map-wrap");
+      const MAP_RESIZE_HANDLE = document.getElementById("map-resize-handle");
+
+      let map;
+      let panorama;
+      let streetViewService;
+      let placesService;
+      let activeCity = null;
+      let actualPosition = null;
+      let guessPosition = null;
+      let guessMarker = null;
+      let actualMarker = null;
+      let distanceLine = null;
+      let rounds = 0;
+      let score = 0;
+      let answerLocked = false;
+      let mapResizing = false;
+      let mapResizeStartY = 0;
+      let mapResizeStartHeight = 180;
+
+      let RENT_DATA_BY_REGION = {};
+      let SALARY_DATA_BY_REGION = {};
+      let salaryDataLoaded = false;
+      let salaryDataLoadError = false;
+      let salaryDataLoadErrorReason = "";
+      let SCB_MUNICIPALITY_CODE_BY_NAME = {};
+
+      const MIN_MAP_HEIGHT = 120;
+      const MAX_MAP_HEIGHT_RATIO = 0.7;
+      const SCB_RENT_STATS_URL =
+        "https://api.scb.se/OV0104/v1/doris/sv/ssd/START/BO/BO0406/BO0406E/BO0406Tab01";
+      const SCB_RENT_REQUEST = {
+        query: [
+          {
+            code: "Region",
+            selection: {
+              filter: "vs:RegionKommun07EjAggr",
+              values: [
+                "0114",
+                "0115",
+                "0117",
+                "0120",
+                "0123",
+                "0125",
+                "0126",
+                "0127",
+                "0128",
+                "0136",
+                "0138",
+                "0139",
+                "0140",
+                "0160",
+                "0162",
+                "0163",
+                "0180",
+                "0181",
+                "0182",
+                "0183",
+                "0184",
+                "0186",
+                "0187",
+                "0188",
+                "0191",
+                "0192",
+                "0305",
+                "0319",
+                "0330",
+                "0331",
+                "0360",
+                "0380",
+                "0381",
+                "0382",
+                "0428",
+                "0461",
+                "0480",
+                "0481",
+                "0482",
+                "0483",
+                "0484",
+                "0486",
+                "0488",
+                "0509",
+                "0512",
+                "0513",
+                "0560",
+                "0561",
+                "0562",
+                "0563",
+                "0580",
+                "0581",
+                "0582",
+                "0583",
+                "0584",
+                "0586",
+                "0604",
+                "0617",
+                "0642",
+                "0643",
+                "0662",
+                "0665",
+                "0680",
+                "0682",
+                "0683",
+                "0684",
+                "0685",
+                "0686",
+                "0687",
+                "0760",
+                "0761",
+                "0763",
+                "0764",
+                "0765",
+                "0767",
+                "0780",
+                "0781",
+                "0821",
+                "0834",
+                "0840",
+                "0860",
+                "0861",
+                "0862",
+                "0880",
+                "0881",
+                "0882",
+                "0883",
+                "0884",
+                "0885",
+                "0980",
+                "1060",
+                "1080",
+                "1081",
+                "1082",
+                "1083",
+                "1214",
+                "1230",
+                "1231",
+                "1233",
+                "1256",
+                "1257",
+                "1260",
+                "1261",
+                "1262",
+                "1263",
+                "1264",
+                "1265",
+                "1266",
+                "1267",
+                "1270",
+                "1272",
+                "1273",
+                "1275",
+                "1276",
+                "1277",
+                "1278",
+                "1280",
+                "1281",
+                "1282",
+                "1283",
+                "1284",
+                "1285",
+                "1286",
+                "1287",
+                "1290",
+                "1291",
+                "1292",
+                "1293",
+                "1315",
+                "1380",
+                "1381",
+                "1382",
+                "1383",
+                "1384",
+                "1401",
+                "1402",
+                "1407",
+                "1415",
+                "1419",
+                "1421",
+                "1427",
+                "1430",
+                "1435",
+                "1438",
+                "1439",
+                "1440",
+                "1441",
+                "1442",
+                "1443",
+                "1444",
+                "1445",
+                "1446",
+                "1447",
+                "1452",
+                "1460",
+                "1461",
+                "1462",
+                "1463",
+                "1465",
+                "1466",
+                "1470",
+                "1471",
+                "1472",
+                "1473",
+                "1480",
+                "1481",
+                "1482",
+                "1484",
+                "1485",
+                "1486",
+                "1487",
+                "1488",
+                "1489",
+                "1490",
+                "1491",
+                "1492",
+                "1493",
+                "1494",
+                "1495",
+                "1496",
+                "1497",
+                "1498",
+                "1499",
+                "1715",
+                "1730",
+                "1737",
+                "1760",
+                "1761",
+                "1762",
+                "1763",
+                "1764",
+                "1765",
+                "1766",
+                "1780",
+                "1781",
+                "1782",
+                "1783",
+                "1784",
+                "1785",
+                "1814",
+                "1860",
+                "1861",
+                "1862",
+                "1863",
+                "1864",
+                "1880",
+                "1881",
+                "1882",
+                "1883",
+                "1884",
+                "1885",
+                "1904",
+                "1907",
+                "1960",
+                "1961",
+                "1962",
+                "1980",
+                "1981",
+                "1982",
+                "1983",
+                "1984",
+                "2021",
+                "2023",
+                "2026",
+                "2029",
+                "2031",
+                "2034",
+                "2039",
+                "2061",
+                "2062",
+                "2080",
+                "2081",
+                "2082",
+                "2083",
+                "2084",
+                "2085",
+                "2101",
+                "2104",
+                "2121",
+                "2132",
+                "2161",
+                "2180",
+                "2181",
+                "2182",
+                "2183",
+                "2184",
+                "2260",
+                "2262",
+                "2280",
+                "2281",
+                "2282",
+                "2283",
+                "2284",
+                "2303",
+                "2305",
+                "2309",
+                "2313",
+                "2321",
+                "2326",
+                "2361",
+                "2380",
+                "2401",
+                "2403",
+                "2404",
+                "2409",
+                "2417",
+                "2418",
+                "2421",
+                "2422",
+                "2425",
+                "2460",
+                "2462",
+                "2463",
+                "2480",
+                "2481",
+                "2482",
+                "2505",
+                "2506",
+                "2510",
+                "2513",
+                "2514",
+                "2518",
+                "2521",
+                "2523",
+                "2560",
+                "2580",
+                "2581",
+                "2582",
+                "2583",
+                "2584"
+              ]
+            }
+          },
+          {
+            code: "Hyresuppg",
+            selection: {
+              filter: "item",
+              values: ["Mh_kvm"]
+            }
+          },
+          {
+            code: "ContentsCode",
+            selection: {
+              filter: "item",
+              values: ["000000RZ"]
+            }
+          }
+        ],
+        response: { format: "json" }
+      };
+      const SCB_SALARY_STATS_URL =
+        "https://api.scb.se/OV0104/v1/doris/sv/ssd/START/AM/AM0106/AM0106A/Kommun17g";
+      const SCB_SALARY_CORE_QUERY = [
+        {
+          code: "Kon",
+          selection: {
+            filter: "item",
+            values: ["1", "2", "1+2"]
+          }
+        },
+        {
+          code: "ContentsCode",
+          selection: {
+            filter: "item",
+            values: ["AM0106B3"]
+          }
+        }
+      ];
+      const SCB_SALARY_REQUEST = {
+        query: [
+          {
+            code: "Region",
+            selection: {
+              filter: "vs:RegionKommun07EjAggr",
+              values: SCB_RENT_REQUEST.query[0]?.selection?.values
+                ? [...SCB_RENT_REQUEST.query[0].selection.values]
+                : []
+            }
+          },
+          ...SCB_SALARY_CORE_QUERY
+        ],
+        response: { format: "json" }
+      };
+      const SCB_SALARY_REQUEST_ALL = {
+        query: [...SCB_SALARY_CORE_QUERY],
+        response: SCB_SALARY_REQUEST.response
+      };
+
+      const SCB_REGION_CODES = new Set(
+        SCB_RENT_REQUEST.query[0]?.selection?.values
+          ? [...SCB_RENT_REQUEST.query[0].selection.values]
+          : []
+      );
+
+      function normalize(value) {
+        return value
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zåäö]/g, "")
+          .trim();
+      }
+
+      function setStatus(message, state = "") {
+        STATUS_EL.className = "status";
+        STATUS_EL.textContent = message;
+        if (state) {
+          STATUS_EL.classList.add(state);
+        }
+      }
+
+      function getRentExtraText() {
+        if (!activeCity || !activeCity.scbCode) return "";
+
+        const rent = RENT_DATA_BY_REGION[activeCity.scbCode];
+        if (rent == null) return "";
+
+        const rentText = rent.toLocaleString("sv-SE", {
+          maximumFractionDigits: 0
+        });
+
+        return ` I ${activeCity.name} är den genomsnittliga nytecknade månadshyran ungefär ${rentText} kr per kvm (2025).`;
+      }
+
+      function getSalaryExtraText() {
+        if (!activeCity || !activeCity.scbCode) return "";
+        if (!salaryDataLoaded) {
+          return salaryDataLoadError
+            ? ` Medianlön: Kunde inte hämta inkomststatistik från SCB. ${salaryDataLoadErrorReason}`
+            : "";
+        }
+
+        const salaries = SALARY_DATA_BY_REGION[activeCity.scbCode];
+        if (!salaries) return ` Medianlön: data saknas för ${activeCity.name}.`;
+
+        const menEntry = salaries.men;
+        const womenEntry = salaries.women;
+        const bothEntry = salaries.both;
+
+        const menValue = toRentNumber(
+          typeof menEntry === "number" ? menEntry : menEntry?.value
+        );
+        const womenValue = toRentNumber(
+          typeof womenEntry === "number" ? womenEntry : womenEntry?.value
+        );
+        const bothValue = toRentNumber(
+          typeof bothEntry === "number" ? bothEntry : bothEntry?.value
+        );
+
+        const menText = menValue == null || Number.isNaN(menValue)
+          ? ""
+          : `män ${menValue.toLocaleString("sv-SE", { maximumFractionDigits: 0 })} kr/mån`;
+        const womenText = womenValue == null || Number.isNaN(womenValue)
+          ? ""
+          : `kvinnor ${womenValue.toLocaleString("sv-SE", { maximumFractionDigits: 0 })} kr/mån`;
+        const bothText = bothValue == null || Number.isNaN(bothValue)
+          ? ""
+          : `${bothValue.toLocaleString("sv-SE", { maximumFractionDigits: 0 })} kr/mån (båda könen)`;
+
+        if (!menText && !womenText) {
+          if (bothText) {
+            return ` Medianlön i ${activeCity.name}: ${bothText}.`;
+          }
+          return "";
+        }
+
+        if (menText && womenText) {
+          return ` Medianlön i ${activeCity.name}: män ${menText.replace(/^män /, "")} och kvinnor ${womenText.replace(/^kvinnor /, "")}.`;
+        }
+
+        const only = menText || womenText;
+        return ` Medianlön i ${activeCity.name}: ${only}.`;
+      }
+
+      function getCityStatisticsText() {
+        const rentText = getRentExtraText();
+        const salaryText = getSalaryExtraText();
+        const parts = [];
+        if (rentText) {
+          parts.push(rentText.trim());
+        }
+        if (salaryText) {
+          parts.push(salaryText.trim());
+        }
+        return parts.length ? ` ${parts.join(" ")}` : "";
+      }
+
+      function updateScoreboard() {
+        ROUND_EL.textContent = String(rounds);
+        SCORE_EL.textContent = `${score} p`;
+      }
+
+      function setControls(enabled) {
+        GUESS_BTN.style.display = enabled ? 'block' : 'none';
+        NEXT_BTN.style.display  = enabled ? 'none'  : 'block';
+        GUESS_BTN.disabled = !enabled;
+        NEXT_BTN.disabled  = false;
+      }
+
+      function getMaxMapHeight() {
+        return Math.max(
+          MIN_MAP_HEIGHT + 40,
+          Math.floor(window.innerHeight * MAX_MAP_HEIGHT_RATIO - 140)
+        );
+      }
+
+      function setMapHeight(heightPx) {
+        if (!MAP_WRAP || !map) return;
+        const clamped = Math.min(
+          Math.max(MIN_MAP_HEIGHT, Math.round(heightPx)),
+          getMaxMapHeight()
+        );
+        MAP_WRAP.style.height = `${clamped}px`;
+        google.maps.event.trigger(map, "resize");
+        const center = map.getCenter();
+        if (center) {
+          map.setCenter(center);
+        }
+      }
+
+      function startMapResize(event) {
+        if (!MAP_WRAP || !MAP_RESIZE_HANDLE || !map) {
+          return;
+        }
+        mapResizing = true;
+        mapResizeStartY = event.clientY;
+        mapResizeStartHeight = Math.max(MIN_MAP_HEIGHT, Math.round(MAP_WRAP.getBoundingClientRect().height));
+        MAP_RESIZE_HANDLE.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+      }
+
+      function continueMapResize(event) {
+        if (!mapResizing || !MAP_WRAP || !map) {
+          return;
+        }
+        const deltaY = mapResizeStartY - event.clientY;
+        setMapHeight(mapResizeStartHeight + deltaY);
+      }
+
+      function stopMapResize(event) {
+        if (!mapResizing) {
+          return;
+        }
+        mapResizing = false;
+        MAP_RESIZE_HANDLE.releasePointerCapture?.(event.pointerId);
+      }
+
+      function toRentNumber(value) {
+        if (typeof value === "number") {
+          return Number.isFinite(value) ? value : NaN;
+        }
+        const cleaned = String(value ?? "").replace(/\s/g, "").replace(",", ".");
+        const parsed = Number(cleaned);
+        return Number.isFinite(parsed) ? parsed : NaN;
+      }
+
+      function parseScbRentResponse(payload) {
+        const rows = {};
+        if (!payload || !Array.isArray(payload.data)) {
+          return rows;
+        }
+
+        for (const row of payload.data) {
+          const regionCode = row?.key?.[0];
+          if (!regionCode) {
+            continue;
+          }
+
+          const values = Array.isArray(row?.values) ? row.values : [];
+          if (!values.length) {
+            continue;
+          }
+          const value = toRentNumber(values[0]);
+          if (!Number.isFinite(value)) {
+            continue;
+          }
+          rows[regionCode] = value;
+        }
+        return rows;
+      }
+
+      function toScbKeyParts(rawKey) {
+        if (Array.isArray(rawKey)) {
+          return rawKey.map((part) => String(part).trim());
+        }
+        if (rawKey == null) {
+          return [];
+        }
+        if (typeof rawKey === "string") {
+          if (/[;,|]/.test(rawKey)) {
+            return rawKey
+              .split(/[;,|]/)
+              .map((value) => value.trim())
+              .filter(Boolean);
+          }
+          return [rawKey.trim()];
+        }
+        return [];
+      }
+
+      function normalizeScbCode(value) {
+        return String(value ?? "").trim();
+      }
+
+      function normalizeRegionCode(value) {
+        const cleaned = normalizeScbCode(value).replace(/\D/g, "");
+        if (!cleaned) {
+          return "";
+        }
+        return cleaned.length <= 4 ? cleaned.padStart(4, "0") : cleaned.slice(-4);
+      }
+
+      function normalizeCityLookupKey(value) {
+        const normalized = normalize(value);
+        if (!normalized) return "";
+        return normalized
+          .replace(/kommun$/g, "")
+          .replace(/l[aâ]n$/g, "")
+          .replace(/stads$/g, "");
+      }
+
+      function lookupMunicipalityCode(value) {
+        if (!value) return "";
+        const exact = normalize(value);
+        if (SCB_MUNICIPALITY_CODE_BY_NAME[exact]) {
+          return SCB_MUNICIPALITY_CODE_BY_NAME[exact];
+        }
+        const compact = normalizeCityLookupKey(value);
+        if (SCB_MUNICIPALITY_CODE_BY_NAME[compact]) {
+          return SCB_MUNICIPALITY_CODE_BY_NAME[compact];
+        }
+        const partialTarget = compact || exact;
+        for (const [name, code] of Object.entries(SCB_MUNICIPALITY_CODE_BY_NAME)) {
+          if (!name || !code) {
+            continue;
+          }
+          if (name === partialTarget || name.includes(partialTarget) || partialTarget.includes(name)) {
+            return code;
+          }
+        }
+        return "";
+      }
+
+      function mapGenderCode(rawCode) {
+        if (rawCode == null) return "";
+        const raw = normalizeScbCode(rawCode).toLowerCase();
+        if (["1", "men", "män", "male", "m", "man"].includes(raw)) {
+          return "men";
+        }
+        if (["2", "women", "kvinnor", "kvinna", "female", "k", "w"].includes(raw)) {
+          return "women";
+        }
+        if (["1+2", "total", "totalt", "båda", "båda kön", "totalen"].includes(raw)) {
+          return "both";
+        }
+        return "";
+      }
+
+      function isRegionCode(code) {
+        return SCB_REGION_CODES.has(code);
+      }
+
+      function looksLikeRegionCode(code) {
+        return /^\d{4}$/.test(code);
+      }
+
+      function extractRegionCode(code) {
+        return normalizeRegionCode(code);
+      }
+
+      function isGenderCode(code) {
+        return code === "1" || code === "2" || code === "1+2";
+      }
+
+      function getLatestPeriod(a, b) {
+        const aValue = Number(String(a ?? "").replace(/\D/g, ""));
+        const bValue = Number(String(b ?? "").replace(/\D/g, ""));
+        const aSafe = Number.isFinite(aValue) ? aValue : Number.NEGATIVE_INFINITY;
+        const bSafe = Number.isFinite(bValue) ? bValue : Number.NEGATIVE_INFINITY;
+        return aSafe === bSafe ? 0 : bSafe - aSafe;
+      }
+
+      function parseScbSalaryResponse(payload) {
+        const rows = {};
+        if (!payload || !Array.isArray(payload.data)) {
+          return rows;
+        }
+
+        const columns = Array.isArray(payload.columns) ? payload.columns : [];
+        const timeColumn = columns.find((column) => {
+          const code = String(column?.code || "").toLowerCase();
+          const text = String(column?.text || "").toLowerCase();
+          return code.includes("tid") || code.includes("år") || text.includes("år") || text.includes("år ");
+        });
+        const timeValues = Array.isArray(timeColumn?.values) ? timeColumn.values : [];
+        const regionColIndex = columns.findIndex((column) => {
+          const code = String(column.code || "").toLowerCase();
+          return code.includes("region") || code.includes("kommun");
+        });
+        const genderColIndex = columns.findIndex((column) => {
+          const code = String(column.code || "").toLowerCase();
+          return code === "kon";
+        });
+        const timeColIndex = columns.findIndex((column) => {
+          const code = String(column.code || "").toLowerCase();
+          const text = String(column.text || "").toLowerCase();
+          return code.includes("tid") || code.includes("år") || text.includes("år");
+        });
+
+        for (const row of payload.data) {
+          const keyParts = toScbKeyParts(row?.key);
+          if (!keyParts.length) {
+            continue;
+          }
+
+          let regionCode =
+            regionColIndex >= 0 ? normalizeRegionCode(keyParts[regionColIndex]) : "";
+          if (!regionCode) {
+            regionCode = lookupMunicipalityCode(
+              regionColIndex >= 0 ? keyParts[regionColIndex] : ""
+            );
+          }
+          if (!regionCode) {
+            const inferredRegion = keyParts.find((part, index) => {
+              if (regionColIndex >= 0 && index === regionColIndex) {
+                return false;
+              }
+              if (timeColIndex >= 0 && index === timeColIndex) {
+                return false;
+              }
+              const candidate = extractRegionCode(part);
+              return looksLikeRegionCode(candidate);
+            });
+            regionCode = extractRegionCode(inferredRegion);
+          }
+          if (!regionCode) {
+            const inferredByName = keyParts.find((part, index) => {
+              if (regionColIndex >= 0 && index === regionColIndex) {
+                return false;
+              }
+              if (timeColIndex >= 0 && index === timeColIndex) {
+                return false;
+              }
+              return !!lookupMunicipalityCode(part);
+            });
+            regionCode = inferredByName
+              ? lookupMunicipalityCode(inferredByName)
+              : "";
+          }
+
+          const genderFromIndex =
+            genderColIndex >= 0 ? normalizeScbCode(keyParts[genderColIndex]) : "";
+          let target = mapGenderCode(genderFromIndex);
+          if (!target) {
+            const inferredGender = keyParts.find((part) => {
+              const raw = normalizeScbCode(part).toLowerCase();
+              if (isGenderCode(raw) || raw === "1+2") {
+                return true;
+              }
+              return mapGenderCode(raw);
+            });
+            target = mapGenderCode(inferredGender);
+          }
+
+          if (!regionCode || !target) {
+            continue;
+          }
+
+          const values = Array.isArray(row?.values) ? row.values : [];
+          if (!values.length) {
+            continue;
+          }
+
+          values.forEach((valueText, index) => {
+            const value = toRentNumber(valueText);
+            if (!Number.isFinite(value)) {
+              return;
+            }
+            const period =
+              timeColIndex >= 0
+                ? keyParts[timeColIndex] || timeValues[index] || String(index)
+                : timeValues[index] || String(index);
+          if (!rows[regionCode]) {
+              rows[regionCode] = {};
+            }
+            const current = rows[regionCode][target];
+            const rowPeriod = period || "";
+            if (!current || getLatestPeriod(current.period, rowPeriod) > 0) {
+              rows[regionCode][target] = { value, period };
+            }
+          });
+        }
+        return rows;
+      }
+
+      function randomCity() {
+        if (!MUNICIPALITIES.length) {
+          return { name: "Stockholm", lat: 59.3293, lng: 18.0686, scbCode: "0180" };
+        }
+        return MUNICIPALITIES[Math.floor(Math.random() * MUNICIPALITIES.length)];
+      }
+
+      const _stockholmNeighbourhoods = getAllNeighbourhoods();
+      function randomStockholmCity() {
+        const n = _stockholmNeighbourhoods[Math.floor(Math.random() * _stockholmNeighbourhoods.length)];
+        return { name: n.name, lat: n.lat, lng: n.lng, scbCode: "0180" };
+      }
+
+      function buildCityOptions() {
+      }
+
+      function toRad(value) {
+        return (value * Math.PI) / 180;
+      }
+
+      function distanceKm(a, b) {
+        const R = 6371;
+        const dLat = toRad(b.lat - a.lat);
+        const dLng = toRad(b.lng - a.lng);
+        const lat1 = toRad(a.lat);
+        const lat2 = toRad(b.lat);
+
+        const sinDLat = Math.sin(dLat / 2);
+        const sinDLng = Math.sin(dLng / 2);
+
+        const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
+        const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+
+        return R * c;
+      }
+
+      function loadPanoramaForCity(city) {
+        return new Promise((resolve) => {
+          streetViewService.getPanorama(
+            {
+              location: { lat: city.lat, lng: city.lng },
+              radius: 10000,
+              source: google.maps.StreetViewSource.OUTDOOR
+            },
+            (data, status) => resolve({ city, data, status })
+          );
+        });
+      }
+
+      function findPlaceNearMunicipality(municipality, query) {
+        return new Promise((resolve) => {
+          if (!placesService) return resolve(null);
+          const locationBias = new google.maps.Circle({
+            center: { lat: municipality.lat, lng: municipality.lng },
+            radius: 30000
+          });
+
+          placesService.findPlaceFromQuery(
+            {
+              query,
+              fields: ["geometry", "name"],
+              locationBias
+            },
+            (results, status) => {
+              if (status !== google.maps.places.PlacesServiceStatus.OK || !results?.length) {
+                resolve(null);
+                return;
+              }
+              const loc = results[0]?.geometry?.location;
+              if (!loc) return resolve(null);
+              resolve({ lat: loc.lat(), lng: loc.lng() });
+            }
+          );
+        });
+      }
+
+      async function getBetterSeedForMunicipality(municipality) {
+        // The GeoJSON centroid often lands in forest/water. Try "centrum" first.
+        const name = municipality?.name;
+        if (!name) return null;
+
+        const best =
+          (await findPlaceNearMunicipality(municipality, `${name} centrum`)) ||
+          (await findPlaceNearMunicipality(municipality, `${name}`));
+        return best;
+      }
+
+      async function startRound() {
+        let found;
+        const tried = new Set();
+
+        hideStatsOverlay();
+        resetAscii();
+        setControls(false);
+        setStatus("Letar efter en slumpmässig plats i Sverige...");
+
+        const forceStockholm = rounds % 3 === 2;
+        while (!found && tried.size < 24) {
+          const city = forceStockholm ? randomStockholmCity() : randomCity();
+          if (tried.has(city.name)) {
+            continue;
+          }
+          tried.add(city.name);
+          setStatus("Searching for a random location...");
+          const betterSeed = await getBetterSeedForMunicipality(city);
+          const seed = betterSeed ? { ...city, ...betterSeed } : city;
+          const result = await loadPanoramaForCity(seed);
+          if (result.status === google.maps.StreetViewStatus.OK && result.data?.location?.latLng) {
+            found = result;
+            break;
+          }
+        }
+
+        if (!found) {
+          setStatus("Ingen Street View hittades i närheten. Försöker igen...");
+          NEXT_BTN.disabled = false;
+          return;
+        }
+
+        activeCity = found.city;
+        actualPosition = {
+          lat: found.data.location.latLng.lat(),
+          lng: found.data.location.latLng.lng()
+        };
+        guessPosition = null;
+        if (guessMarker) {
+          guessMarker.setMap(null);
+        }
+        if (actualMarker) {
+          actualMarker.setMap(null);
+          actualMarker = null;
+        }
+        if (distanceLine) {
+          distanceLine.setMap(null);
+          distanceLine = null;
+        }
+        panorama.setPano(found.data.location.pano);
+        panorama.setPov({
+          heading: Math.round(Math.random() * 360),
+          pitch: Math.round(Math.random() * 20) - 10,
+          zoom: 1
+        });
+        panorama.setVisible(true);
+
+        answerLocked = false;
+        rounds += 1;
+        updateScoreboard();
+        setStatus("Klicka på kartan för att gissa var du är.");
+        setControls(true);
+      }
+
+      const ASCII_CHARS   = ' .`\'^-~+=<>ilL!I;:,"^rstx+?jf/\\vYXJUZO0Qoahkdbpqwm*WMB8&#%@';
+      const ASCII_FONT_PX = 9;
+      const MAPS_API_KEY  = 'AIzaSyB9XsLlCIagOqduNWysHQ55ZFxm9iLp1EU';
+      let   asciiAnimId   = null;
+
+      async function revealAscii() {
+        if (!actualPosition) return;
+        const outCanvas = document.getElementById('ascii-overlay');
+        const srcCanvas = document.getElementById('ascii-canvas');
+        if (!outCanvas || !srcCanvas) return;
+
+        const panoEl = document.getElementById('pano');
+        const W = panoEl.offsetWidth;
+        const H = panoEl.offsetHeight;
+
+        const charW = ASCII_FONT_PX * 0.55;
+        const charH = ASCII_FONT_PX * 1.2;
+        const cols  = Math.floor(W / charW);
+        const rows  = Math.floor(H / charH);
+
+        // Fetch source image
+        const imgW = 640, imgH = 640;
+        srcCanvas.width = imgW; srcCanvas.height = imgH;
+        const srcCtx = srcCanvas.getContext('2d');
+        const pov = panorama.getPov();
+        const imgUrl =
+          `https://maps.googleapis.com/maps/api/streetview` +
+          `?size=${imgW}x${imgH}` +
+          `&location=${actualPosition.lat},${actualPosition.lng}` +
+          `&heading=${Math.round(pov.heading)}&pitch=${Math.round(pov.pitch)}&fov=90` +
+          `&key=${MAPS_API_KEY}`;
+        try {
+          await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload  = () => { srcCtx.drawImage(img, 0, 0, imgW, imgH); resolve(); };
+            img.onerror = reject;
+            img.src = imgUrl;
+          });
+        } catch (err) {
+          console.error('ASCII: image load failed', err);
+          return;
+        }
+
+        // Pre-compute every cell's correct char + color
+        const allPixels = srcCtx.getImageData(0, 0, imgW, imgH).data;
+        const cellW = imgW / cols;
+        const cellH = imgH / rows;
+        const cells = new Array(cols * rows);
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const sx = Math.floor(c * cellW), sy = Math.floor(r * cellH);
+            const ex = Math.min(imgW, Math.ceil((c + 1) * cellW));
+            const ey = Math.min(imgH, Math.ceil((r + 1) * cellH));
+            let rr = 0, gg = 0, bb = 0, n = 0;
+            for (let py = sy; py < ey; py++) {
+              for (let px = sx; px < ex; px++) {
+                const i = (py * imgW + px) * 4;
+                rr += allPixels[i]; gg += allPixels[i+1]; bb += allPixels[i+2]; n++;
+              }
+            }
+            rr /= n; gg /= n; bb /= n;
+            // Brightness + contrast boost so the ASCII pops against the dark background
+            const boost = v => Math.min(255, Math.max(0, ((v / 255 - 0.5) * 2.2 + 0.5) * 255 + 70));
+            rr = boost(rr); gg = boost(gg); bb = boost(bb);
+            const bri = 0.299*rr + 0.587*gg + 0.114*bb;
+            cells[r * cols + c] = {
+              ch: ASCII_CHARS[Math.floor((bri / 255) * (ASCII_CHARS.length - 1))],
+              color: `rgb(${Math.round(rr)},${Math.round(gg)},${Math.round(bb)})`,
+              x: c * charW,
+              y: r * charH + ASCII_FONT_PX,
+              // left-to-right wave with randomness: leftmost cols lock in first
+              lockAt: (c / cols) * 800 + Math.random() * 400
+            };
+          }
+        }
+
+        // Pre-render final frame to an offscreen canvas for fast blitting
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = W; finalCanvas.height = H;
+        const finalCtx = finalCanvas.getContext('2d');
+        finalCtx.fillStyle = '#000';
+        finalCtx.fillRect(0, 0, W, H);
+        finalCtx.font = `${ASCII_FONT_PX}px monospace`;
+        for (const cell of cells) {
+          finalCtx.fillStyle = cell.color;
+          finalCtx.fillText(cell.ch, cell.x, cell.y);
+        }
+
+        // Set up output canvas
+        outCanvas.width = W; outCanvas.height = H;
+        const outCtx = outCanvas.getContext('2d');
+        outCtx.font = `${ASCII_FONT_PX}px monospace`;
+        outCanvas.style.opacity = '1';
+
+        const REVEAL_MS  = 1200;
+        const FLICKER_N  = Math.ceil(cells.length * 0.002);
+        const startTime  = performance.now();
+
+        function frame(now) {
+          const elapsed = now - startTime;
+
+          // Base: blit the fully-rendered final image (one fast GPU operation)
+          outCtx.drawImage(finalCanvas, 0, 0);
+
+          // Overdraw unresolved cells — scramble rate slows as cell approaches lockAt
+          if (elapsed < REVEAL_MS) {
+            for (const cell of cells) {
+              if (elapsed < cell.lockAt) {
+                // progress 0→1 toward lock; scramble probability drops off quadratically
+                const progress = elapsed / cell.lockAt;
+                const scrambleChance = 1 - progress * progress;
+                if (Math.random() < scrambleChance) {
+                  outCtx.fillStyle = '#000';
+                  outCtx.fillRect(cell.x, cell.y - ASCII_FONT_PX, charW + 1, charH);
+                  outCtx.fillStyle = cell.color;
+                  outCtx.fillText(
+                    ASCII_CHARS[Math.floor(Math.random() * ASCII_CHARS.length)],
+                    cell.x, cell.y
+                  );
+                }
+              }
+            }
+          }
+
+          // Ongoing flicker — keeps the image alive indefinitely
+          for (let i = 0; i < FLICKER_N; i++) {
+            const cell = cells[Math.floor(Math.random() * cells.length)];
+            outCtx.fillStyle = '#000';
+            outCtx.fillRect(cell.x, cell.y - ASCII_FONT_PX, charW + 1, charH);
+            outCtx.fillStyle = cell.color;
+            outCtx.fillText(
+              ASCII_CHARS[Math.floor(Math.random() * ASCII_CHARS.length)],
+              cell.x, cell.y
+            );
+          }
+
+          asciiAnimId = requestAnimationFrame(frame);
+        }
+
+        asciiAnimId = requestAnimationFrame(frame);
+      }
+
+      function resetAscii() {
+        if (asciiAnimId !== null) { cancelAnimationFrame(asciiAnimId); asciiAnimId = null; }
+        const overlay = document.getElementById('ascii-overlay');
+        if (!overlay) return;
+        overlay.style.opacity = '0';
+        const ctx = overlay.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, overlay.width, overlay.height);
+      }
+
+      function countUpEl(el, duration) {
+        const target = parseFloat(el.dataset.val);
+        const dec    = parseInt(el.dataset.dec  || "0");
+        const suffix = el.dataset.suffix || "";
+        const start  = performance.now();
+        function tick(now) {
+          const t     = Math.min(1, (now - start) / duration);
+          const eased = 1 - Math.pow(1 - t, 3);
+          const val   = eased * target;
+          el.textContent = dec > 0
+            ? val.toFixed(dec) + suffix
+            : Math.round(val).toLocaleString("sv-SE") + suffix;
+          if (t < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      }
+
+      function animateEl(el, keyframe, delaySec, durationSec = 0.65) {
+        el.style.animation = "none";
+        el.style.opacity   = "0";
+        // Force reflow so the reset takes effect
+        void el.offsetWidth;
+        el.style.animation = `${keyframe} ${durationSec}s ease ${delaySec}s both`;
+      }
+
+      function showStatsOverlay(distance, points) {
+        const overlay = document.getElementById("stats-overlay");
+        const nameEl  = document.getElementById("stats-city-name");
+        const chartEl = document.getElementById("stats-chart");
+        if (!overlay || !nameEl || !chartEl || !activeCity) return;
+
+        nameEl.textContent = activeCity.name;
+        overlay.querySelectorAll(".stats-city-sub, .stats-result").forEach(el => el.remove());
+
+        const neighbourhood = actualPosition
+          ? getNeighbourhoodByCoords(actualPosition.lat, actualPosition.lng)
+          : null;
+
+        // 1. City name — fades in first
+        animateEl(nameEl, "statsFadeDown", 0.2);
+
+        // 2. Neighbourhood subtitle (if Stockholm)
+        if (neighbourhood) {
+          const subEl = document.createElement("div");
+          subEl.className = "stats-city-sub";
+          subEl.textContent = `${neighbourhood.name} · ${neighbourhood.district}`;
+          nameEl.after(subEl);
+          animateEl(subEl, "statsFadeDown", 0.2);
+        }
+
+        // 3. Distance — fades in second
+        if (distance != null && points != null) {
+          const insertAfter = overlay.querySelector(".stats-city-sub") || nameEl;
+          const resultEl = document.createElement("div");
+          resultEl.className = "stats-result";
+          resultEl.innerHTML = `
+            <span class="stats-result-distance">Du var ${distance.toFixed(1)} km bort</span>
+            <span class="stats-result-points">${points.toLocaleString("sv-SE")}</span>
+            <span class="stats-result-points-label">points</span>`;
+          insertAfter.after(resultEl);
+          animateEl(resultEl, "statsFadeDown", 1.0);
+        }
+
+        // 4. Statistics — fades up last, with count-up numbers and growing bars
+        const MAX_RENT_KR = 12000;
+        const barCols = [];
+
+        if (neighbourhood) {
+          const pct = Math.min(100, (neighbourhood.rent1room / MAX_RENT_KR) * 100);
+          barCols.push({ pct, val: neighbourhood.rent1room, dec: 0, suffix: " kr/mån",
+            label: "Hyra 30 kvm/mån", gradient: "linear-gradient(to top,#888,#fff)" });
+        } else {
+          const rent = activeCity.scbCode ? RENT_DATA_BY_REGION[activeCity.scbCode] : null;
+          if (rent != null && Number.isFinite(rent)) {
+            const rentFor35 = rent * 35;
+            barCols.push({ pct: Math.min(100, (rentFor35 / MAX_RENT_KR) * 100),
+              val: rentFor35, dec: 0, suffix: " kr/mån",
+              label: "Hyra 35 kvm/mån", gradient: "linear-gradient(to top,#888,#fff)" });
+          }
+        }
+
+        const waitData = neighbourhood || getQueueInfo(activeCity.name);
+        if (waitData) {
+          barCols.push({ pct: Math.min(100, (waitData.waitAvg / 25) * 100),
+            val: waitData.waitAvg, dec: waitData.waitAvg % 1 === 0 ? 0 : 1, suffix: " år",
+            label: "Kötid bostad", gradient: "linear-gradient(to top,#888,#fff)" });
+        }
+
+        if (!barCols.length) {
+          chartEl.innerHTML = '<p class="stats-no-data">Ingen statistik tillgänglig</p>';
+        } else {
+          chartEl.innerHTML = `<div class="staple-chart">${barCols.map(b => `
+            <div class="staple-col">
+              <span class="staple-value" data-val="${b.val}" data-dec="${b.dec}" data-suffix="${b.suffix}">0${b.suffix}</span>
+              <div class="staple-bar-track">
+                <div class="staple-bar-fill" data-pct="${b.pct.toFixed(1)}" style="background:${b.gradient}"></div>
+              </div>
+              <span class="staple-label">${b.label}</span>
+            </div>`).join("")}</div>`;
+        }
+
+        animateEl(chartEl, "statsFadeUp", 1.9, 0.8);
+
+        // 5. Housing providers — horizontal thumbnail row
+        const providersEl = document.getElementById("stats-providers");
+        if (providersEl) {
+          const lookupName = activeCity.scbCode === "0180" ? "Stockholm – innerstad" : activeCity.name;
+          const { municipal, large_private, small_private } = getProviders(lookupName);
+
+          // municipal first, then small/local, then large nationals — deduplicated, max 10
+          const seen = new Set();
+          const all = [...municipal, ...small_private, ...large_private].filter(pv => {
+            if (seen.has(pv.name)) return false;
+            seen.add(pv.name);
+            return true;
+          }).slice(0, 10);
+
+          if (all.length) {
+            providersEl.innerHTML = `
+              <div class="providers-label">Hitta bostad i ${activeCity.name}</div>
+              <div class="providers-row">${all.map(pv => `
+                <a href="${pv.url}" target="_blank" rel="noopener" class="provider-card">
+                  <img class="provider-logo" src="${pv.logo}" alt="${pv.name}" onerror="this.style.visibility='hidden'">
+                  <span class="provider-name">${pv.name}</span>
+                  <span class="provider-badge ${pv.hasQueue ? 'queue' : 'direct'}">${pv.hasQueue ? 'Kö' : 'Direkt'}</span>
+                </a>`).join("")}
+              </div>`;
+            animateEl(providersEl, "statsFadeUp", 3.0, 0.8);
+          } else {
+            providersEl.innerHTML = '';
+          }
+        }
+
+        overlay.style.display = "flex";
+
+        // Trigger bars and count-up after chart has faded in
+        setTimeout(() => {
+          requestAnimationFrame(() => {
+            chartEl.querySelectorAll(".staple-bar-fill").forEach(el => {
+              el.style.height = el.dataset.pct + "%";
+            });
+            chartEl.querySelectorAll(".staple-value[data-val]").forEach(el => {
+              countUpEl(el, 900);
+            });
+          });
+        }, 2200);
+      }
+
+      function hideStatsOverlay() {
+        const overlay = document.getElementById("stats-overlay");
+        if (overlay) overlay.style.display = "none";
+      }
+
+      function finalizeGuess() {
+        if (answerLocked || !activeCity) return;
+
+        if (!guessPosition) {
+          setStatus("Klicka på kartan för att placera din gissning.");
+          return;
+        }
+
+        answerLocked = true;
+        if (actualMarker) {
+          actualMarker.setMap(null);
+        }
+        actualMarker = new google.maps.Marker({
+          map,
+          position: actualPosition,
+          title: `Actual location: ${activeCity.name}`,
+          icon: {
+            path: "M 0 -11.5 L 2.2 -3.5 L 10.5 -3.5 L 3.6 1.2 L 6 9 L 0 4.3 L -6 9 L -3.6 1.2 L -10.5 -3.5 L -2.2 -3.5 Z",
+            scale: 1,
+            fillColor: "#000000",
+            fillOpacity: 0.95,
+            strokeColor: "#000000",
+            strokeWeight: 1,
+            anchor: new google.maps.Point(0, 0)
+          }
+        });
+        if (distanceLine) {
+          distanceLine.setMap(null);
+        }
+        distanceLine = new google.maps.Polyline({
+          map,
+          path: [
+            { lat: actualPosition.lat, lng: actualPosition.lng },
+            { lat: guessPosition.lat, lng: guessPosition.lng }
+          ],
+          strokeColor: "#5bc0ff",
+          strokeOpacity: 0.9,
+          strokeWeight: 3
+        });
+        const distance = distanceKm(actualPosition, guessPosition);
+        const maxPoints = 5000;
+        const points = Math.max(0, Math.round(maxPoints * Math.exp(-distance / 2000)));
+        score += points;
+        updateScoreboard();
+        setControls(false);
+        NEXT_BTN.disabled = false;
+        showStatsOverlay(distance, points);
+        setTimeout(revealAscii, 2000);
+      }
+
+      async function loadMunicipalities() {
+        try {
+          const response = await fetch("municipalities.json");
+          if (!response.ok) {
+            throw new Error("Failed to load municipalities.json");
+          }
+          const data = await response.json();
+          if (Array.isArray(data) && data.length) {
+            MUNICIPALITIES = data;
+            SCB_MUNICIPALITY_CODE_BY_NAME = {};
+            for (const city of data) {
+              if (city?.name && city?.scbCode) {
+                const key = String(city.scbCode).trim();
+                const normalizedName = normalize(city.name);
+                const compactName = normalizeCityLookupKey(city.name);
+                SCB_MUNICIPALITY_CODE_BY_NAME[normalizedName] = key;
+                if (compactName) {
+                  SCB_MUNICIPALITY_CODE_BY_NAME[compactName] = key;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error(err);
+          MUNICIPALITIES = [];
+        }
+      }
+      async function loadRentData() {
+        try {
+          const response = await fetch(SCB_RENT_STATS_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8"
+            },
+            body: JSON.stringify(SCB_RENT_REQUEST)
+          });
+          if (!response.ok) {
+            throw new Error(
+              `Failed to load SCB rent statistics: ${response.status} ${response.statusText}`
+            );
+          }
+          const payload = await response.json();
+          const parsedData = parseScbRentResponse(payload);
+          if (!parsedData || !Object.keys(parsedData).length) {
+            throw new Error("SCB rent response has no data");
+          }
+          RENT_DATA_BY_REGION = parsedData;
+          return;
+        } catch (err) {
+          console.error(err);
+          const fallbackRent = {};
+          try {
+            const response = await fetch("rents.json");
+            if (response.ok) {
+              const localData = await response.json();
+              if (localData && typeof localData === "object") {
+                for (const [regionCode, rentValue] of Object.entries(localData)) {
+                  const value = Number(rentValue);
+                  if (!regionCode || !Number.isFinite(value)) {
+                    continue;
+                  }
+                  fallbackRent[regionCode] = value;
+                }
+              }
+            }
+          } catch (localErr) {
+            console.error(localErr);
+          }
+          RENT_DATA_BY_REGION = fallbackRent;
+        }
+      }
+      async function loadSalaryData() {
+        const tryRequest = async (requestConfig) => {
+          const response = await fetch(SCB_SALARY_STATS_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8"
+            },
+            body: JSON.stringify(requestConfig)
+          });
+          if (!response.ok) {
+            throw new Error(
+              `Failed to load SCB salary statistics: ${response.status} ${response.statusText}`
+            );
+          }
+          const payload = await response.json();
+          return parseScbSalaryResponse(payload);
+        };
+        try {
+          let parsedData = await tryRequest(SCB_SALARY_REQUEST);
+          if (!parsedData || !Object.keys(parsedData).length) {
+            parsedData = await tryRequest(SCB_SALARY_REQUEST_ALL);
+          }
+          if (!parsedData || !Object.keys(parsedData).length) {
+            salaryDataLoadErrorReason = "No usable SCB data rows returned.";
+            throw new Error(
+              `SCB salary response has no usable data. Tried request with and without region filter.`
+            );
+          }
+          SALARY_DATA_BY_REGION = parsedData;
+          salaryDataLoaded = true;
+          salaryDataLoadError = false;
+          salaryDataLoadErrorReason = "";
+          return;
+        } catch (err) {
+          salaryDataLoadErrorReason = err?.message || "Unknown error.";
+          console.error(err);
+          SALARY_DATA_BY_REGION = {};
+          salaryDataLoaded = false;
+          salaryDataLoadError = true;
+        }
+      }
+
+      async function initialize() {
+        const swedenCenter = { lat: 62.0, lng: 16.0 };
+
+        map = new google.maps.Map(document.getElementById("map"), {
+          center: swedenCenter,
+          zoom: 4,
+          mapTypeControl: false,
+          fullscreenControl: false,
+          streetViewControl: false
+        });
+        setMapHeight(MAP_WRAP ? MAP_WRAP.getBoundingClientRect().height : 180);
+
+        if (MAP_RESIZE_HANDLE) {
+          MAP_RESIZE_HANDLE.addEventListener("pointerdown", startMapResize);
+        }
+        if (MAP_WRAP) {
+          window.addEventListener("pointermove", continueMapResize);
+          window.addEventListener("pointerup", stopMapResize);
+          window.addEventListener("pointercancel", stopMapResize);
+          window.addEventListener("resize", () => {
+            if (!MAP_WRAP || !map) return;
+            setMapHeight(MAP_WRAP.getBoundingClientRect().height);
+          });
+        }
+
+        panorama = new google.maps.StreetViewPanorama(document.getElementById("pano"), {
+          position: swedenCenter,
+          pov: {
+            heading: 34,
+            pitch: 10
+          },
+          addressControl: false,
+          linksControl: true,
+          panoControl: false,
+          zoomControl: false
+        });
+
+        map.setStreetView(panorama);
+        map.addListener("click", (event) => {
+          if (answerLocked) return;
+          guessPosition = {
+            lat: event.latLng.lat(),
+            lng: event.latLng.lng()
+          };
+          if (!guessMarker) {
+            guessMarker = new google.maps.Marker({
+              map,
+              position: event.latLng
+            });
+          } else {
+            guessMarker.setPosition(event.latLng);
+            guessMarker.setMap(map);
+          }
+          setStatus("Gissning placerad. Tryck Gissa för att bekräfta.");
+        });
+        streetViewService = new google.maps.StreetViewService();
+        placesService = new google.maps.places.PlacesService(map);
+
+        await loadMunicipalities();
+        await Promise.all([loadRentData(), loadSalaryData()]);
+
+        setControls(false);
+        updateScoreboard();
+        startRound();
+      }
+
+      function nextRound() {
+        NEXT_BTN.disabled = true;
+        startRound();
+      }
+
+      GUESS_BTN.addEventListener("click", finalizeGuess);
+      NEXT_BTN.addEventListener("click", nextRound);
+
+      window.initialize = initialize;
+    </script>
+
+    <!-- Google Maps JavaScript API key -->
+    <script
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB9XsLlCIagOqduNWysHQ55ZFxm9iLp1EU&callback=initialize&v=weekly&libraries=places&solution_channel=GMP_CCS_streetview_v2"
+      async
+    ></script>
+  </body>
+</html>

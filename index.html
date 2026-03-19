@@ -1,0 +1,2035 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>ASCII Sweden</title>
+    <style>
+      :root {
+        --bg: #000;
+        --fg: #fff;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--bg);
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+
+      body {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        touch-action: none;
+      }
+
+      #particle-layer {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 2;
+      }
+
+      pre {
+        position: relative;
+        z-index: 1;
+        margin: 0;
+        color: var(--fg);
+        white-space: pre;
+        font-family: "Courier New", Courier, monospace;
+        font-size: min(8px, calc(94vh / 108), calc(96vw / 86));
+        line-height: 1;
+        letter-spacing: 0.04em;
+        text-shadow: 0 0 8px rgba(255, 255, 255, 0.28);
+        user-select: none;
+        transition: opacity 0.1s linear;
+      }
+
+      #merge-text {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--fg);
+        font-family: "Courier New", Courier, monospace;
+        font-size: clamp(1.4rem, 4.5vw, 4rem);
+        letter-spacing: 0.06em;
+        text-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
+        pointer-events: none;
+        z-index: 3;
+        opacity: 0;
+        user-select: none;
+      }
+
+      #reveal-text {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(68ch, 88vw);
+        color: var(--fg);
+        font-family: "Courier New", Courier, monospace;
+        font-size: clamp(0.62rem, 1.45vw, 0.95rem);
+        line-height: 1.9;
+        letter-spacing: 0.03em;
+        text-align: center;
+        pointer-events: none;
+        z-index: 4;
+        opacity: 0;
+        user-select: none;
+      }
+
+      #reveal-text .rv {
+        display: inline-block;
+        opacity: 0;
+        will-change: opacity;
+      }
+
+      .extra-para {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(68ch, 88vw);
+        color: var(--fg);
+        font-family: "Courier New", Courier, monospace;
+        font-size: clamp(0.62rem, 1.45vw, 0.95rem);
+        line-height: 1.9;
+        letter-spacing: 0.03em;
+        text-align: center;
+        pointer-events: none;
+        z-index: 4;
+        opacity: 0;
+        user-select: none;
+      }
+
+      .extra-para .rv {
+        display: inline-block;
+        opacity: 0;
+        will-change: opacity;
+      }
+
+      #reveal-text .last-q {
+        display: block;
+        margin-top: 1.4em;
+        font-size: 1.35em;
+        letter-spacing: 0.05em;
+        text-shadow: 0 0 14px rgba(255,255,255,0.3);
+      }
+
+      /* ─── Queue diagram ──────────────────────────── */
+      #queue-wrap {
+        position: fixed;
+        bottom: 2rem;
+        left: 0;
+        right: 0;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.7s ease;
+        z-index: 5;
+      }
+      #queue-wrap.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #queue-canvas {
+        display: block;
+        width: 100%;
+        cursor: crosshair;
+      }
+      #queue-tooltip {
+        position: fixed;
+        background: rgba(0,0,0,0.88);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #fff;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 0.72rem;
+        padding: 0.35rem 0.7rem;
+        pointer-events: none;
+        z-index: 100;
+        display: none;
+        white-space: nowrap;
+        letter-spacing: 0.04em;
+        line-height: 1.6;
+      }
+
+      #game-btn {
+        position: fixed;
+        bottom: 2.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: transparent;
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.5);
+        font-family: "Courier New", Courier, monospace;
+        font-size: clamp(0.75rem, 1.5vw, 1rem);
+        padding: 0.7rem 2.5rem;
+        cursor: pointer;
+        letter-spacing: 0.12em;
+        z-index: 10;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.8s ease, border-color 0.2s, background 0.2s;
+        white-space: nowrap;
+      }
+
+      #game-btn.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      #game-btn:hover {
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.9);
+        text-shadow: 0 0 14px rgba(255,255,255,0.4);
+      }
+
+      /* ─── Side comparison diagrams (Ockelbo / Östermalm) ─ */
+      #ockelbo-wrap, #ostermalm-wrap {
+        position: fixed;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 1s ease;
+        z-index: 5;
+      }
+      #ockelbo-wrap  { left: 8vw; }
+      #ostermalm-wrap { right: 8vw; }
+      #ockelbo-wrap.visible, #ostermalm-wrap.visible { opacity: 1; }
+      @media (max-width: 1050px) {
+        #ockelbo-wrap, #ostermalm-wrap { display: none; }
+      }
+
+      /* ─── Responsive layout ──────────────────────────────── */
+
+      /* Tablets (≤ 900px) */
+      @media (max-width: 900px) {
+        #reveal-text, .extra-para {
+          font-size: clamp(0.78rem, 2.6vw, 0.92rem);
+          line-height: 1.8;
+          width: min(60ch, 92vw);
+        }
+        #queue-wrap { bottom: 0.75rem; }
+        #game-btn   { bottom: 2rem; padding: 0.65rem 2.2rem; }
+      }
+
+      /* Phones (≤ 600px) */
+      @media (max-width: 600px) {
+        pre {
+          font-size: min(6px, calc(92vh / 108), calc(96vw / 86));
+        }
+        #reveal-text, .extra-para {
+          font-size: clamp(0.82rem, 4vw, 0.95rem);
+          line-height: 1.7;
+          width: 94vw;
+          top: 38%;
+          letter-spacing: 0.02em;
+        }
+        #reveal-text .last-q {
+          font-size: 1.15em;
+          margin-top: 0.9em;
+        }
+        #queue-wrap  { bottom: 0.4rem; }
+        #queue-tooltip {
+          font-size: 0.65rem;
+          max-width: 90vw;
+          white-space: normal;
+          padding: 0.28rem 0.55rem;
+          line-height: 1.4;
+        }
+        #game-btn {
+          bottom: 1rem;
+          font-size: 0.82rem;
+          padding: 0.7rem 1.6rem;
+          min-height: 44px;
+        }
+      }
+
+      /* Small phones (≤ 400px) */
+      @media (max-width: 400px) {
+        #reveal-text, .extra-para {
+          font-size: clamp(0.8rem, 4.4vw, 0.9rem);
+          line-height: 1.62;
+          top: 34%;
+        }
+      }
+
+      /* Landscape phones (short viewport) */
+      @media (max-height: 480px) {
+        #reveal-text, .extra-para {
+          font-size: clamp(0.72rem, 1.8vh, 0.88rem);
+          line-height: 1.55;
+          top: 35%;
+        }
+        #queue-wrap  { bottom: 0.25rem; }
+        #game-btn    { bottom: 0.6rem; padding: 0.5rem 1.4rem; }
+      }
+
+      /* Large / 4K screens */
+      @media (min-width: 2000px) {
+        #reveal-text, .extra-para {
+          font-size: clamp(0.95rem, 0.9vw, 1.4rem);
+          line-height: 1.95;
+          width: min(80ch, 70vw);
+        }
+        #queue-tooltip { font-size: 0.9rem; }
+        #game-btn { font-size: 1.1rem; padding: 0.9rem 3.5rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="particle-layer" aria-hidden="true"></canvas>
+    <pre id="sweden" aria-label="Animated ASCII art of Sweden"></pre>
+    <div id="merge-text">Vart ska jag bo?</div>
+    <div id="queue-wrap">
+      <canvas id="queue-canvas"></canvas>
+    </div>
+    <div id="queue-tooltip"></div>
+    <button id="game-btn" onclick="window.location.href='game.html'">Så vart ska jag bo?</button>
+    <div id="ockelbo-wrap"><canvas id="ockelbo-canvas"></canvas></div>
+    <div id="ostermalm-wrap"><canvas id="ostermalm-canvas"></canvas></div>
+    <div id="reveal-text">
+      200&nbsp;000 unga vill flytta hemifrån&nbsp;– men kan inte.
+      Räntorna är höga, bostadsköerna långa,
+      andrahandsmarknaden snårig och bedragare
+      utnyttjar desperata lägenhetsjägare.
+      <span class="last-q">Hur blev det så här, och var ska alla unga vuxna bo?</span>
+    </div>
+
+    <script>
+      const WIDTH = 86;
+      const HEIGHT = 108;
+      const CITY_WORDS = `
+Alingsås
+Alvesta
+Aneby
+Arboga
+Arjeplog
+Arvidsjaur
+Arvika
+Askersund
+Avesta
+Bengtsfors
+Bergsjö
+Bjurholm
+Bjuv
+Boden
+Bollebygd
+Bollnäs
+Borgholm
+Borlänge
+Borås
+Botkyrka
+Boxholm
+Bromölla
+Bräcke
+Burlöv
+Båstad
+Dals-Ed
+Danderyd
+Degerfors
+Dorotea
+Eda
+Ekerö
+Eksjö
+Emmaboda
+Enköping
+Eskilstuna
+Eslöv
+Essunga
+Fagersta
+Falkenberg
+Falköping
+Falun
+Filipstad
+Finspång
+Flen
+Forshaga
+Gagnef
+Gislaved
+Gnesta
+Gnosjö
+Gotland
+Grums
+Grästorp
+Gullspång
+Gällivare
+Gävle
+Göteborg
+Götene
+Habo
+Hagfors
+Hallsberg
+Hallstahammar
+Halmstad
+Hammarö
+Haninge
+Haparanda
+Heby
+Hedemora
+Helsingborg
+Herrljunga
+Hjo
+Hofors
+Huddinge
+Hudiksvall
+Hultsfred
+Hylte
+Håbo
+Sveg
+Härnösand
+Härryda
+Hässleholm
+Höganäs
+Högsby
+Hörby
+Höör
+Jokkmokk
+Järfälla
+Jönköping
+Kalix
+Kalmar
+Karlsborg
+Karlshamn
+Karlskoga
+Karlskrona
+Karlstad
+Katrineholm
+Kil
+Kinda
+Kiruna
+Klippan
+Knivsta
+Kramfors
+Kristianstad
+Kristinehamn
+Krokom
+Kumla
+Kungsbacka
+Kungsör
+Kungälv
+Kävlinge
+Köping
+Laholm
+Landskrona
+Laxå
+Lekeberg
+Leksand
+Lerum
+Lessebo
+Lidingö
+Lidköping
+Lilla Edet
+Lindesberg
+Linköping
+Ljungby
+Ljusdal
+Lomma
+Ludvika
+Luleå
+Lund
+Lycksele
+Lysekil
+Malmö
+Malung
+Sälen
+Mariestad
+Mark
+Markaryd
+Mellerud
+Mjölby
+Mora
+Motala
+Mullsjö
+Munkedal
+Munkfors
+Mölndal
+Mönsterås
+Mörbylånga
+Nacka
+Nora
+Norberg
+Nordanstig
+Nordmaling
+Norrköping
+Norrtälje
+Norsjö
+Nybro
+Nyköping
+Nynäshamn
+Nässjö
+Ockelbo
+Olofström
+Orsa
+Orust
+Osby
+Oskarshamn
+Ovanåker
+Oxelösund
+Pajala
+Partille
+Perstorp
+Piteå
+Ragunda
+Robertsfors
+Ronneby
+Rättvik
+Sala
+Salem
+Sandviken
+Sigtuna
+Simrishamn
+Sjöbo
+Skara
+Skellefteå
+Skinnskatteberg
+Skurup
+Skövde
+Smedjebacken
+Sollefteå
+Sollentuna
+Solna
+Sorsele
+Sotenäs
+Staffanstorp
+Stenungsund
+Stockholm
+Strängnäs
+Strömstad
+Strömsund
+Sundbyberg
+Sundsvall
+Sunne
+Surahammar
+Svalöv
+Svedala
+Svenljunga
+Säffle
+Säter
+Sävsjö
+Söderhamn
+Söderköping
+Södertälje
+Sölvesborg
+Tanum
+Tibro
+Tidaholm
+Tierp
+Timrå
+Tingsryd
+Tjörn
+Tomelilla
+Torsby
+Torsås
+Tranemo
+Tranås
+Trelleborg
+Trollhättan
+Trosa
+Tyresö
+Täby
+Töreboda
+Uddevalla
+Ulricehamn
+Umeå
+Upplands-Bro
+Upplands Väsby
+Uppsala
+Uppvidinge
+Vadstena
+Vaggeryd
+Valdemarsvik
+Vallentuna
+Vansbro
+Vara
+Varberg
+Vaxholm
+Vellinge
+Vetlanda
+Vilhelmina
+Vimmerby
+Vindeln
+Vingåker
+Vänersborg
+Vännäs
+Värmdö
+Värnamo
+Västervik
+Västerås
+Växjö
+Ydre
+Ystad
+Åmål
+Ånge
+Åre
+Årjäng
+Åsele
+Åstorp
+Åtvidaberg
+Älmhult
+Älvdalen
+Älvkarleby
+Älvsbyn
+Ängelholm
+Öckerö
+Ödeshög
+Örebro
+Örkelljunga
+Örnsköldsvik
+Östersund
+Österåker
+Östhammar
+Östra Göinge
+Överkalix
+Övertorneå
+`
+        .trim()
+        .split("\n")
+        .map((city) => city.trim())
+        .filter(Boolean);
+      const art = document.getElementById("sweden");
+      const mergeTextEl = document.getElementById("merge-text");
+      const revealTextEl = document.getElementById("reveal-text");
+      const particleCanvas = document.getElementById("particle-layer");
+      const gameBtnEl = document.getElementById("game-btn");
+
+      // Wrap each word in the reveal paragraph with an animatable span
+      // (preserve the .last-q block untouched, only process text nodes)
+      (function prepareRevealSpans() {
+        function wrapTextNode(node) {
+          const parts = node.textContent.split(/(\s+)/);
+          const frag = document.createDocumentFragment();
+          parts.forEach(part => {
+            if (part.trim()) {
+              const s = document.createElement("span");
+              s.className = "rv";
+              s.textContent = part;
+              frag.appendChild(s);
+            } else if (part) {
+              frag.appendChild(document.createTextNode(part));
+            }
+          });
+          node.parentNode.replaceChild(frag, node);
+        }
+        Array.from(revealTextEl.childNodes).forEach(n => {
+          if (n.nodeType === Node.TEXT_NODE && n.textContent.trim()) wrapTextNode(n);
+        });
+        // Also wrap words inside .last-q
+        const lastQ = revealTextEl.querySelector(".last-q");
+        if (lastQ) {
+          const words = lastQ.textContent.split(/(\s+)/);
+          lastQ.innerHTML = words.map(w => w.trim()
+            ? `<span class="rv">${w}</span>` : w).join("");
+        }
+      })();
+      const revealSpans = Array.from(revealTextEl.querySelectorAll(".rv"));
+
+      // Formation particle system — all paragraph text rendered on canvas
+      const formParticles = [];
+      let formationPhase = 0;
+      let pendingFormTransition = null; // set by scroll, consumed when settled
+      let formFontSize = 0; // cached paragraph font size in px
+
+      function getSpanTargets(spans) {
+        return spans.map(s => {
+          const r = s.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2, text: s.textContent.trim() };
+        }).filter(t => t.text.length > 0);
+      }
+
+      function triggerFormTransition(targets, fromEl) {
+        // Snapshot current live positions before scattering
+        const sources = formParticles.map(fp => ({ x: fp.x, y: fp.y }));
+        // Scatter every active form particle
+        for (const fp of formParticles) {
+          if (!fp.leaving) {
+            fp.leaving = true;
+            fp.leaveLife = 2.2;
+            const angle = Math.random() * Math.PI * 2;
+            const spd = 50 + Math.random() * 120;
+            fp.vx += Math.cos(angle) * spd;
+            fp.vy += Math.sin(angle) * spd;
+          }
+        }
+        // Spawn new particles flying toward their target word positions
+        targets.forEach((target, i) => {
+          let sx, sy;
+          if (fromEl) {
+            const r = fromEl.getBoundingClientRect();
+            sx = r.left + Math.random() * r.width;
+            sy = r.top + Math.random() * r.height;
+          } else if (sources.length > 0) {
+            const src = sources[i % sources.length];
+            sx = src.x + (Math.random() - 0.5) * 80;
+            sy = src.y + (Math.random() - 0.5) * 80;
+          } else {
+            sx = window.innerWidth / 2 + (Math.random() - 0.5) * 320;
+            sy = window.innerHeight / 2 + (Math.random() - 0.5) * 140;
+          }
+          formParticles.push({
+            x: sx, y: sy,
+            vx: (Math.random() - 0.5) * 30,
+            vy: (Math.random() - 0.5) * 30,
+            tx: target.x, ty: target.y,
+            text: target.text,
+            alpha: 0,
+            leaving: false,
+            leaveLife: 0
+          });
+        });
+      }
+
+      function isFormationSettled() {
+        const active = formParticles.filter(fp => !fp.leaving);
+        if (active.length === 0) return true; // no formation yet = ready
+        return active.every(fp => Math.hypot(fp.tx - fp.x, fp.ty - fp.y) < 3 && Math.hypot(fp.vx, fp.vy) < 2);
+      }
+
+      // Extra paragraphs revealed one-by-one on continued scrolling
+      const EXTRA_PARA_RANGE = 400;
+      const EXTRA_PARA_GAP   = 120;
+      const EXTRA_PARA_TEXTS = [
+        "Det är natt och dag i olika delar av Sverige när det kommer till kötid på bostäder. Där det är längst kötid tar det i genomsnitt 20 år. Och på vissa ställen är kötiden NOLL.",
+        "Den som vill ha en hyresrätt i storstadsregionerna får vara beredd att vänta i decennier. Men på många andra platser råder egentligen ingen bostadsbrist.",
+        "Hyresköer i storstäder som Stockholm och Göteborg kan kräva 20 respektive 10 års väntan, men på flera ställen i landet finns ingen bostadsbrist."
+      ];
+
+      const extraParas = EXTRA_PARA_TEXTS.map((text, idx) => {
+        const startScroll = 1900 + idx * (EXTRA_PARA_RANGE + EXTRA_PARA_GAP);
+        const div = document.createElement("div");
+        div.className = "extra-para";
+        div.innerHTML = text.split(/(\s+)/).map(w =>
+          w.trim() ? `<span class="rv">${w}</span>` : w
+        ).join("");
+        document.body.appendChild(div);
+        return { el: div, spans: Array.from(div.querySelectorAll(".rv")), progress: 0, target: 0, startScroll };
+      });
+      const particleCtx = particleCanvas.getContext("2d");
+      let lastTouchY = null;
+      let pendingBurst = 0;
+      let lastFrameMs = performance.now();
+      let windX = 0;
+      let windY = -4;
+      let flowBand = HEIGHT * 0.45;
+      let flowBandVelocity = 0;
+      const particles = [];
+      const MAX_PARTICLES = 1800;
+      const imageParticles = [];
+      const MAX_IMAGE_PARTICLES = 10;
+      const imageSpawnQueue = [];
+      let pendingAmbientImage = 0;
+      let mouseImageAccum = 0;
+      let lastImageSpawnTime = -99;
+      let mouseX = 0, mouseY = 0;
+      let scrollTotal = 0;
+      let scrollPhaseIdx = 0;
+      let phaseGapAccum = 0;
+      const PHASE_GAP = 400;
+      let lastPhaseAdvanceTime = -9999;
+      const PHASE_COOLDOWN_MS = 700; // min ms between phase advances
+      let mergeTarget = 0;
+      let mergeProgress = 0;
+      let textReveal = 0;
+      let mergeBurstFired = false;
+      const MERGE_START = 350;
+      const MERGE_RANGE = 550;
+      let merge2Target = 0;
+      let merge2Progress = 0;
+      let merge2BurstFired = false;
+      const MERGE2_START = 1100;
+      const MERGE2_RANGE = 500;
+      const TARGET_WORDS = ["Vart", "ska", "jag", "bo?"];
+
+      const IMAGE_SOURCES = [
+        "images/lagenhet-falkoping.jpg",
+        "images/sakerhetsdorr-for-lagenhet.jpg",
+        "images/skrapan-vast--1024x755.jpg",
+        "images/Brf-Nyåsbo-press-1.jpg.webp",
+        "images/MED24AD11D412D54B5AA3BC6C3A251DC7B3_1400.jpg",
+        "images/Screenshot 2026-03-18 at 16.31.42.png",
+        "images/Screenshot 2026-03-18 at 16.34.16.png",
+        "images/Screenshot 2026-03-18 at 16.34.40.png",
+        "images/Screenshot 2026-03-18 at 16.34.48.png",
+        "images/Screenshot 2026-03-18 at 16.34.56.png",
+        "images/Screenshot 2026-03-18 at 16.35.37.png",
+        "images/Screenshot 2026-03-18 at 16.36.58.png",
+        "images/Screenshot 2026-03-18 at 16.37.26.png",
+        "images/Tensta-SH-1.jpeg",
+        "images/c2b2f8431d41f6526dd3b4b64ceb4987.jpg",
+        "images/dörr.jpg",
+        "images/fult-flerbostadshus-på-kanten-av-en-industriell-stad-100244316.jpg.webp",
+        "images/slat_valnot_TR342sakerhetsdorr-3-1.jpg.webp"
+      ];
+      const loadedImages = IMAGE_SOURCES.map((src) => {
+        const img = new Image();
+        img.src = src;
+        return img;
+      });
+      let dpr = Math.min(2, window.devicePixelRatio || 1);
+      let charSizePx = 8;
+      let cityOffset = 0;
+      let currentPlacements = [];
+      let rowOffsets = [];
+
+      function resizeCanvas() {
+        dpr = Math.min(2, window.devicePixelRatio || 1);
+        particleCanvas.width = Math.max(1, Math.floor(window.innerWidth * dpr));
+        particleCanvas.height = Math.max(1, Math.floor(window.innerHeight * dpr));
+        particleCanvas.style.width = `${window.innerWidth}px`;
+        particleCanvas.style.height = `${window.innerHeight}px`;
+        charSizePx = parseFloat(getComputedStyle(art).fontSize) || 8;
+      }
+
+      function queueBurst(amount) {
+        pendingBurst = Math.min(2.4, pendingBurst + amount);
+      }
+
+      function injectAmbientBurst(dt, t) {
+        if (textReveal > 0) return;
+        // Three non-harmonic sine waves → complex, non-repeating organic signal, no random pops
+        const a = (Math.sin(t * 0.17) + 1) * 0.5;       // ~37s period
+        const b = (Math.sin(t * 0.41 + 2.1) + 1) * 0.5; // ~15s period
+        const c = (Math.sin(t * 0.083 + 4.7) + 1) * 0.5; // ~76s period
+        const drift = 0.0008 + a * 0.0010 + b * 0.0005 + c * 0.0005;
+        queueBurst(drift * dt * 60);
+
+        // Ambient image trickle — accumulator avoids discrete pops
+        pendingAmbientImage += (a * b * 0.10 + 0.018) * dt;
+        if (pendingAmbientImage >= 1 && imageParticles.length < 3 && imageSpawnQueue.length === 0) {
+          pendingAmbientImage -= 1;
+          spawnImageParticle(0.06);
+        }
+      }
+
+      // Schedule a backward formation: scatter current particles, queue previous text
+      function scheduleBackwardFormation(oddPhaseIdx) {
+        const prevCpIdx = (oddPhaseIdx - 1) / 2; // content phase we're returning to
+        if (prevCpIdx <= 0) {
+          // Back to Sweden / merge phase — just scatter, no new formation
+          for (const fp of formParticles) {
+            if (!fp.leaving) {
+              fp.leaving = true; fp.leaveLife = 2.2;
+              const a = Math.random() * Math.PI * 2;
+              fp.vx += Math.cos(a) * (50 + Math.random() * 120);
+              fp.vy += Math.sin(a) * (50 + Math.random() * 120);
+            }
+          }
+          pendingFormTransition = null;
+        } else if (prevCpIdx === 1) {
+          pendingFormTransition = { spans: revealSpans, fromEl: null };
+        } else {
+          const para = extraParas[prevCpIdx - 2];
+          if (para) pendingFormTransition = { spans: para.spans, fromEl: null };
+        }
+      }
+
+      window.addEventListener(
+        "wheel",
+        (event) => {
+          const absDelta = Math.abs(event.deltaY);
+          const forward = event.deltaY > 0;
+          queueBurst(Math.min(0.9, absDelta / 420));
+          // Cap how much a single event can advance phases — prevents skipping slides on fast scroll
+          const phaseDelta = Math.min(absDelta, 120);
+
+          // Build ordered phase list: content phases interleaved with gap phases (null)
+          const contentPhases = [
+            { get: () => mergeTarget,  set: v => { mergeTarget  = v; }, range: MERGE_RANGE  },
+            { get: () => merge2Target, set: v => { merge2Target = v; }, range: MERGE2_RANGE },
+            ...extraParas.map(p => ({ get: () => p.target, set: v => { p.target = v; }, range: EXTRA_PARA_RANGE }))
+          ];
+          // Flat list: content, gap, content, gap, …
+          const phases = contentPhases.flatMap((cp, i) => i === 0 ? [cp] : [null, cp]);
+
+          const now = performance.now();
+          const canAdvance = now - lastPhaseAdvanceTime >= PHASE_COOLDOWN_MS;
+
+          if (forward) {
+            if (scrollPhaseIdx >= phases.length) { event.preventDefault(); return; }
+            const phase = phases[scrollPhaseIdx];
+            if (phase === null) {
+              phaseGapAccum += phaseDelta;
+              if (phaseGapAccum >= PHASE_GAP && canAdvance) {
+                lastPhaseAdvanceTime = now;
+                scrollPhaseIdx++;
+                phaseGapAccum = 0;
+                const cpIdx = scrollPhaseIdx / 2;
+                if (cpIdx === 1) {
+                  pendingFormTransition = { spans: revealSpans, fromEl: mergeTextEl };
+                } else if (extraParas[cpIdx - 2]) {
+                  pendingFormTransition = { spans: extraParas[cpIdx - 2].spans, fromEl: null };
+                }
+              }
+            } else {
+              const newVal = Math.min(1, phase.get() + phaseDelta / phase.range);
+              phase.set(newVal);
+              if (newVal >= 1 && canAdvance) {
+                lastPhaseAdvanceTime = now;
+                scrollPhaseIdx++;
+                phaseGapAccum = 0;
+              }
+            }
+          } else {
+            // Backward
+            const phase = phases[scrollPhaseIdx];
+            if (phase === null) {
+              phaseGapAccum -= phaseDelta;
+              if (phaseGapAccum < 0 && canAdvance) {
+                lastPhaseAdvanceTime = now;
+                scrollPhaseIdx--;
+                phaseGapAccum = 0;
+              }
+            } else {
+              const newVal = Math.max(0, phase.get() - phaseDelta / phase.range);
+              phase.set(newVal);
+              if (newVal <= 0 && scrollPhaseIdx > 0 && canAdvance) {
+                lastPhaseAdvanceTime = now;
+                scrollPhaseIdx--;
+                phaseGapAccum = PHASE_GAP;
+                scheduleBackwardFormation(scrollPhaseIdx);
+              }
+            }
+          }
+          event.preventDefault();
+        },
+        { passive: false }
+      );
+
+      window.addEventListener(
+        "touchstart",
+        (event) => {
+          if (event.touches[0]) lastTouchY = event.touches[0].clientY;
+        },
+        { passive: true }
+      );
+
+      window.addEventListener(
+        "touchmove",
+        (event) => {
+          if (event.touches[0] && lastTouchY !== null) {
+            const delta = lastTouchY - event.touches[0].clientY; // positive = swipe up = forward
+            queueBurst(Math.min(0.9, Math.abs(delta) / 80));
+            // Reuse wheel logic by dispatching a synthetic wheel event value
+            if (Math.abs(delta) > 1) {
+              window.dispatchEvent(new WheelEvent("wheel", { deltaY: delta * 2.5, cancelable: true }));
+            }
+            lastTouchY = event.touches[0].clientY;
+          }
+          event.preventDefault();
+        },
+        { passive: false }
+      );
+
+      window.addEventListener(
+        "touchend",
+        () => {
+          lastTouchY = null;
+        },
+        { passive: true }
+      );
+
+      window.addEventListener("mousemove", (event) => {
+        const dx = event.clientX - mouseX;
+        const dy = event.clientY - mouseY;
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+        const speed = Math.hypot(dx, dy);
+        mouseImageAccum += speed;
+        const now = performance.now() * 0.001;
+        // Faster mouse = shorter cooldown (0.15s at high speed, 0.5s when slow)
+        const cooldown = Math.max(0.15, 0.5 - speed * 0.015);
+        if (mouseImageAccum > 25 && now - lastImageSpawnTime > cooldown &&
+            imageParticles.length + imageSpawnQueue.length < MAX_IMAGE_PARTICLES) {
+          mouseImageAccum = 0;
+          lastImageSpawnTime = now;
+          imageSpawnQueue.push({ time: now, intensity: Math.min(0.8, speed * 0.02 + 0.2) });
+        }
+      }, { passive: true });
+
+      window.addEventListener("resize", () => { formFontSize = 0; resizeCanvas(); }, { passive: true });
+      resizeCanvas();
+
+      const halfProfile = [
+        [0, 2.2],
+        [0.05, 5.1],
+        [0.12, 9.2],
+        [0.22, 13.6],
+        [0.34, 15.2],
+        [0.46, 13.7],
+        [0.58, 12.7],
+        [0.72, 12.1],
+        [0.84, 10.9],
+        [0.93, 9.8],
+        [1, 8]
+      ];
+
+      const centerProfile = [
+        [0, 43],
+        [0.14, 44],
+        [0.3, 43.2],
+        [0.46, 41.1],
+        [0.62, 39.8],
+        [0.78, 39],
+        [0.9, 38],
+        [1, 37.2]
+      ];
+
+      const eastOffsetProfile = [
+        [0, 1],
+        [0.12, 3.2],
+        [0.22, 5.2],
+        [0.35, 3.1],
+        [0.46, 0.2],
+        [0.58, 1.8],
+        [0.68, 6.1],
+        [0.76, 1.1],
+        [0.88, -0.9],
+        [1, -1.2]
+      ];
+
+      const westOffsetProfile = [
+        [0, 0.3],
+        [0.25, -0.9],
+        [0.42, -2.2],
+        [0.58, 0.2],
+        [0.74, -1.1],
+        [0.9, -2.2],
+        [1, -2.2]
+      ];
+
+      const gotlandSpans = [
+        [82, 60, 61],
+        [83, 60, 62],
+        [84, 59, 63],
+        [85, 59, 63],
+        [86, 58, 63],
+        [87, 58, 62],
+        [88, 58, 62],
+        [89, 58, 61],
+        [90, 59, 61],
+        [91, 59, 60]
+      ];
+
+      const olandSpans = [
+        [92, 55, 55],
+        [93, 55, 56],
+        [94, 55, 56],
+        [95, 55, 56],
+        [96, 55, 56],
+        [97, 55, 56],
+        [98, 55, 55],
+        [99, 55, 55],
+        [100, 54, 55],
+        [101, 54, 54],
+        [102, 54, 54]
+      ];
+
+      function lerp(a, b, t) {
+        return a + (b - a) * t;
+      }
+
+      function interpProfile(profile, t) {
+        if (t <= profile[0][0]) return profile[0][1];
+        for (let i = 1; i < profile.length; i++) {
+          const [x1, y1] = profile[i - 1];
+          const [x2, y2] = profile[i];
+          if (t <= x2) {
+            const localT = (t - x1) / (x2 - x1 || 1);
+            return lerp(y1, y2, localT);
+          }
+        }
+        return profile[profile.length - 1][1];
+      }
+
+      function hash2(x, y) {
+        let n = (x * 374761393 + y * 668265263) | 0;
+        n = (n ^ (n >> 13)) * 1274126177;
+        n ^= n >> 16;
+        return (n >>> 0) / 4294967295;
+      }
+
+      function mainlandSpan(y) {
+        const t = y / (HEIGHT - 1);
+        const center = interpProfile(centerProfile, t);
+        const half = interpProfile(halfProfile, t);
+        let left = center - half + interpProfile(westOffsetProfile, t);
+        let right = center + half + interpProfile(eastOffsetProfile, t);
+
+        const southSoft = t > 0.88 ? Math.max(0.28, 1 - ((t - 0.88) / 0.12) * 0.72) : 1;
+        const eastJag = t < 0.2 ? 0.6 : t < 0.55 ? 1.4 : t < 0.82 ? 1.9 : 1.1;
+        right +=
+          Math.sin(y * 1.9) * eastJag * southSoft +
+          Math.sin(y * 4.3 + 0.6) * 0.85 * southSoft +
+          Math.sin(y * 9.7 + 0.8) * 0.45 * southSoft;
+
+        left += Math.sin(y * 0.55 + 1.4) * 0.7 * southSoft + Math.sin(y * 2.2) * 0.45 * southSoft;
+
+        // Gulf and archipelago shaping.
+        right -= 3.8 * Math.exp(-Math.pow((t - 0.47) / 0.08, 2));
+        right += 3.2 * Math.exp(-Math.pow((t - 0.69) / 0.045, 2));
+        right -= 2.1 * Math.exp(-Math.pow((t - 0.83) / 0.05, 2));
+        left -= 1.9 * Math.exp(-Math.pow((t - 0.34) / 0.07, 2));
+        left += 2.2 * Math.exp(-Math.pow((t - 0.61) / 0.06, 2));
+        left -= 1.4 * Math.exp(-Math.pow((t - 0.77) / 0.05, 2));
+
+        // Smoother southern rounding (less pointed bottom).
+        if (t > 0.88) {
+          const u = (t - 0.88) / 0.12;
+          left -= 2.3 * (1 - u) * u;
+          right += 1.9 * (1 - u) * u;
+        }
+        if (t > 0.93) {
+          const u = (t - 0.93) / 0.07;
+          left += u * u * 4.2;
+          right -= u * u * 4.8;
+        }
+        if (t > 0.975) {
+          const u = (t - 0.975) / 0.025;
+          left += u * 1.6;
+          right -= u * 1.8;
+        }
+
+        left = Math.round(left);
+        right = Math.round(right);
+
+        if (right - left < 5) {
+          const mid = (left + right) * 0.5;
+          left = Math.floor(mid - 2);
+          right = Math.ceil(mid + 2);
+        }
+
+        return [Math.max(1, left), Math.min(WIDTH - 2, right)];
+      }
+
+      function buildLand() {
+        const grid = Array.from({ length: HEIGHT }, () => Array(WIDTH).fill(false));
+        const spans = [];
+
+        for (let y = 0; y < HEIGHT; y++) {
+          const span = mainlandSpan(y);
+          spans.push(span);
+          for (let x = span[0]; x <= span[1]; x++) {
+            grid[y][x] = true;
+          }
+        }
+
+        for (let y = 0; y < HEIGHT; y++) {
+          const [left, right] = spans[y];
+          const t = y / (HEIGHT - 1);
+          const eastBites = t > 0.9 ? 1 : t < 0.18 ? 1 : t < 0.55 ? 2 : t < 0.8 ? 3 : 2;
+
+          for (let d = 0; d <= eastBites; d++) {
+            if (right - d <= left + 1) continue;
+            if (hash2(y * 17 + d * 13, 71) > 0.56 + d * 0.11) {
+              grid[y][right - d] = false;
+            }
+          }
+
+          if (y > 58 && y < 79 && hash2(y, 911) > 0.28) {
+            const depth = 1 + Math.floor(hash2(y, 551) * 3);
+            for (let d = 0; d <= depth; d++) {
+              if (right - d > left + 1) grid[y][right - d] = false;
+            }
+          }
+
+          const westBites = (y > 70 && t < 0.9 ? 1 : 0) + (hash2(y, 222) > 0.78 && t < 0.94 ? 1 : 0);
+          for (let d = 0; d < westBites; d++) {
+            if (left + d >= right - 1) continue;
+            if (hash2(y, d + 333) > 0.5) grid[y][left + d] = false;
+          }
+        }
+
+        for (const [y, left, right] of gotlandSpans) {
+          for (let x = left; x <= right; x++) {
+            if (grid[y]?.[x] !== undefined) grid[y][x] = true;
+          }
+        }
+
+        for (const [y, left, right] of olandSpans) {
+          for (let x = left; x <= right; x++) {
+            if (grid[y]?.[x] !== undefined) grid[y][x] = true;
+          }
+        }
+
+        return grid;
+      }
+
+      const land = buildLand();
+
+      const rowSegments = land.map((row) => {
+        const segments = [];
+        let x = 0;
+        while (x < WIDTH) {
+          while (x < WIDTH && !row[x]) x++;
+          if (x >= WIDTH) break;
+          const start = x;
+          while (x < WIDTH && row[x]) x++;
+          segments.push([start, x - 1]);
+        }
+        return segments;
+      });
+
+      rowOffsets = Array.from({ length: HEIGHT }, (_, y) => Math.floor(hash2(y + 11, 557) * CITY_WORDS.length));
+
+      function nextCity(index) {
+        const safe = ((index % CITY_WORDS.length) + CITY_WORDS.length) % CITY_WORDS.length;
+        return CITY_WORDS[safe];
+      }
+
+      function buildWordFrame() {
+        const lines = Array.from({ length: HEIGHT }, () => Array(WIDTH).fill(" "));
+        const placements = [];
+        let cursor = cityOffset;
+
+        for (let y = 0; y < HEIGHT; y++) {
+          for (const [segmentStart, segmentEnd] of rowSegments[y]) {
+            let start = segmentStart + 1;
+            const end = segmentEnd - 1;
+            if (end - start < 4) continue;
+
+            if ((y + segmentStart) % 3 === 0) start += 1;
+            let x = start;
+
+            while (x <= end) {
+              const city = nextCity(cursor + rowOffsets[y] + x);
+              const width = city.length;
+
+              if (x + width - 1 > end) break;
+
+              for (let i = 0; i < width; i++) {
+                lines[y][x + i] = city[i];
+              }
+
+              placements.push({ x, y, city });
+              x += width + 1;
+              cursor += 1;
+            }
+          }
+        }
+
+        return {
+          text: lines.map((line) => line.join("")).join("\n"),
+          placements
+        };
+      }
+
+      function triggerBurst(intensity, nowSec) {
+        const previousPlacements = currentPlacements;
+        const centerRow = Math.floor(Math.random() * HEIGHT);
+        const rowRadius = 12 + Math.random() * 20 + intensity * 18;
+
+        cityOffset = (cityOffset + 1 + Math.floor(Math.random() * 5 + intensity * 7)) % CITY_WORDS.length;
+
+        for (let y = 0; y < HEIGHT; y++) {
+          const distance = Math.abs(y - centerRow);
+          const localInfluence = Math.max(0, 1 - distance / rowRadius);
+          const mutateChance = 0.03 + localInfluence * 0.64;
+
+          if (Math.random() < mutateChance) {
+            rowOffsets[y] = (rowOffsets[y] + 1 + Math.floor(Math.random() * (2 + localInfluence * 7 + intensity * 4))) % CITY_WORDS.length;
+          }
+        }
+
+        const rect = art.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+
+        const stepX = rect.width / WIDTH;
+        const stepY = rect.height / HEIGHT;
+        const cx = rect.left + rect.width * 0.52;
+        const cy = rect.top + rect.height * 0.5;
+
+        for (const placement of previousPlacements) {
+          const bandDistance = Math.abs(placement.y - centerRow);
+          const bandInfluence = Math.max(0, 1 - bandDistance / (rowRadius + 6));
+          const localChance = Math.min(0.92, 0.055 + bandInfluence * (0.12 + intensity * 0.25));
+          if (Math.random() > localChance) continue;
+          if (particles.length >= MAX_PARTICLES) particles.shift();
+
+          const px = rect.left + (placement.x + placement.city.length * 0.5) * stepX;
+          const py = rect.top + (placement.y + 0.5) * stepY;
+          const speed = 20 + Math.random() * 60 + intensity * 90;
+          const randomAngle = Math.random() * Math.PI * 2;
+
+          particles.push({
+            x: px,
+            y: py,
+            vx: Math.cos(randomAngle) * speed + (Math.random() - 0.5) * 160,
+            vy: Math.sin(randomAngle) * speed * 0.28 + (Math.random() - 0.5) * 28,
+            age: 0,
+            life: 3.8 + Math.random() * 5.2,
+            text: placement.city,
+            wiggle: Math.random() * Math.PI * 2
+          });
+        }
+
+        if (Math.random() < 0.06 + intensity * 0.15) {
+          spawnImageParticle(intensity);
+        }
+      }
+
+      function spawnImageParticle(intensity) {
+        if (textReveal > 0) return;
+        const readyImages = loadedImages.filter((img) => img.complete && img.naturalWidth > 0);
+        if (!readyImages.length || imageParticles.length >= MAX_IMAGE_PARTICLES) return;
+        const img = readyImages[Math.floor(Math.random() * readyImages.length)];
+        const imgSize = 52 + Math.random() * 68;
+        const aspect = img.naturalWidth / img.naturalHeight || 1;
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const speed = 55 + Math.random() * 90 + intensity * 60;
+        const vertDrift = (Math.random() - 0.5) * 35;
+        imageParticles.push({
+          x: mouseX,
+          y: mouseY,
+          vx: side * speed,
+          vy: vertDrift,
+          age: 0,
+          life: 3,
+          img,
+          w: imgSize * aspect,
+          h: imgSize,
+          wiggle: Math.random() * Math.PI * 2
+        });
+      }
+
+      function drawBase() {
+        const frame = buildWordFrame();
+        currentPlacements = frame.placements;
+        art.textContent = frame.text;
+      }
+
+      function pointToSegmentDist(px, py, ax, ay, bx, by) {
+        const dx = bx - ax, dy = by - ay;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) return Math.hypot(px - ax, py - ay);
+        const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+        return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+      }
+
+      function nearestCorners(fa, fb) {
+        const ca = [
+          { x: fa.x - fa.hw, y: fa.y - fa.hh },
+          { x: fa.x + fa.hw, y: fa.y - fa.hh },
+          { x: fa.x - fa.hw, y: fa.y + fa.hh },
+          { x: fa.x + fa.hw, y: fa.y + fa.hh }
+        ];
+        const cb = [
+          { x: fb.x - fb.hw, y: fb.y - fb.hh },
+          { x: fb.x + fb.hw, y: fb.y - fb.hh },
+          { x: fb.x - fb.hw, y: fb.y + fb.hh },
+          { x: fb.x + fb.hw, y: fb.y + fb.hh }
+        ];
+        let best = Infinity, ptA = ca[0], ptB = cb[0];
+        for (const a of ca) {
+          for (const b of cb) {
+            const d = Math.hypot(a.x - b.x, a.y - b.y);
+            if (d < best) { best = d; ptA = a; ptB = b; }
+          }
+        }
+        return { ptA, ptB };
+      }
+
+      function drawParticles(dt, t) {
+        particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        particleCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        particleCtx.font = `${charSizePx}px "Courier New", Courier, monospace`;
+        particleCtx.textAlign = "center";
+        particleCtx.textBaseline = "middle";
+        particleCtx.fillStyle = "#ffffff";
+
+        const liveTextPositions = [];
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.age += dt;
+          const lifeN = p.age / p.life;
+
+          // Remove particles that have aged out or flown far off screen
+          const offScreen = p.y < -window.innerHeight * 0.6 || p.y > window.innerHeight * 1.6
+                         || p.x < -window.innerWidth   || p.x > window.innerWidth * 2;
+          if (lifeN >= 1 || offScreen) {
+            particles.splice(i, 1);
+            continue;
+          }
+
+          const mergePush = Math.max(0, (mergeProgress - 0.38) / 0.37);
+          const turbScale = Math.max(0, 1 - mergePush * 2);
+
+          const turbulence = Math.sin(p.wiggle + t * 2.3 + p.y * 0.012) * 18 * turbScale;
+          p.vx += (Math.cos(p.wiggle + t * 1.7 + p.x * 0.01) * 3.6 + windX * 0.15) * dt * turbScale;
+          p.vy += (Math.sin(p.wiggle + t * 1.9 + p.x * 0.009) * 3.6 + windY * 0.11) * dt * turbScale;
+
+          if (mergePush > 0) {
+            // Push each particle radially outward from screen center
+            const tcx = window.innerWidth * 0.5;
+            const tcy = window.innerHeight * 0.5;
+            const ddx = p.x - tcx;
+            const ddy = p.y - tcy;
+            const dist = Math.hypot(ddx, ddy) || 1;
+            const force = mergePush * 420;
+            p.vx += (ddx / dist) * force * dt;
+            p.vy += (ddy / dist) * force * dt;
+            const damp = Math.max(0.84, 1 - mergePush * 0.16);
+            p.vx *= damp;
+            p.vy *= damp;
+          }
+
+          p.vx *= 0.995;
+          p.vy *= 0.996;
+          p.x += (p.vx + turbulence + windX * turbScale) * dt;
+          p.y += (p.vy + windY * turbScale) * dt;
+
+          const wordAlpha = Math.max(0, 1 - lifeN * lifeN) * (1 - textReveal);
+          if (wordAlpha <= 0) continue;
+          particleCtx.globalAlpha = wordAlpha;
+          particleCtx.fillText(p.text, p.x, p.y);
+          liveTextPositions.push({ x: p.x, y: p.y, alpha: wordAlpha });
+        }
+
+        // Image particles
+        const liveImgFrames = [];
+        for (let i = imageParticles.length - 1; i >= 0; i--) {
+          const p = imageParticles[i];
+          p.age += dt;
+          const lifeN = p.age / p.life;
+          if (lifeN >= 1 || p.x < -window.innerWidth || p.x > window.innerWidth * 2 || p.y < -window.innerHeight || p.y > window.innerHeight * 2) {
+            imageParticles.splice(i, 1);
+            continue;
+          }
+          const turbulence = Math.sin(p.wiggle + t * 1.4 + p.y * 0.008) * 8;
+          p.vx += (Math.cos(p.wiggle + t * 1.1 + p.x * 0.007) * 1.8 + windX * 0.08) * dt;
+          p.vy += (Math.sin(p.wiggle + t * 1.2 + p.x * 0.006) * 1.8 + windY * 0.06) * dt;
+          p.vx *= 0.995;
+          p.vy *= 0.996;
+          p.x += (p.vx + turbulence + windX) * dt;
+          p.y += (p.vy + windY) * dt;
+
+          const { w, h } = p;
+          const alpha = Math.max(0, 1 - lifeN) * (1 - textReveal);
+          if (alpha <= 0) continue;
+
+          particleCtx.globalAlpha = alpha;
+          particleCtx.drawImage(p.img, p.x - w / 2, p.y - h / 2, w, h);
+          particleCtx.strokeStyle = "#ffffff";
+          particleCtx.lineWidth = 0.5;
+          particleCtx.strokeRect(p.x - w / 2, p.y - h / 2, w, h);
+
+          liveImgFrames.push({ x: p.x, y: p.y, hw: w / 2, hh: h / 2, alpha });
+        }
+
+        particleCtx.strokeStyle = "#ffffff";
+        particleCtx.lineWidth = 0.5;
+
+        // Corner-to-corner lines between images
+        if (liveImgFrames.length > 1) {
+          for (let a = 0; a < liveImgFrames.length; a++) {
+            for (let b = a + 1; b < liveImgFrames.length; b++) {
+              const { ptA, ptB } = nearestCorners(liveImgFrames[a], liveImgFrames[b]);
+              particleCtx.globalAlpha = Math.min(liveImgFrames[a].alpha, liveImgFrames[b].alpha);
+              particleCtx.beginPath();
+              particleCtx.moveTo(ptA.x, ptA.y);
+              particleCtx.lineTo(ptB.x, ptB.y);
+              particleCtx.stroke();
+            }
+          }
+        }
+
+        // Each image connects to its nearest floating word
+        if (liveImgFrames.length > 0 && liveTextPositions.length > 0) {
+          for (const fa of liveImgFrames) {
+            let nearestDist = Infinity, nearestWord = null;
+            for (const tp of liveTextPositions) {
+              const d = Math.hypot(tp.x - fa.x, tp.y - fa.y);
+              if (d < nearestDist) { nearestDist = d; nearestWord = tp; }
+            }
+            if (!nearestWord) continue;
+            // nearest corner of image toward the word
+            const corners = [
+              { x: fa.x - fa.hw, y: fa.y - fa.hh },
+              { x: fa.x + fa.hw, y: fa.y - fa.hh },
+              { x: fa.x - fa.hw, y: fa.y + fa.hh },
+              { x: fa.x + fa.hw, y: fa.y + fa.hh }
+            ];
+            let corner = corners[0], bestD = Infinity;
+            for (const c of corners) {
+              const d = Math.hypot(c.x - nearestWord.x, c.y - nearestWord.y);
+              if (d < bestD) { bestD = d; corner = c; }
+            }
+            particleCtx.globalAlpha = fa.alpha * nearestWord.alpha;
+            particleCtx.beginPath();
+            particleCtx.moveTo(corner.x, corner.y);
+            particleCtx.lineTo(nearestWord.x, nearestWord.y);
+            particleCtx.stroke();
+          }
+        }
+
+        // Formation particles: spring toward target, scatter when leaving
+        if (!formFontSize) formFontSize = parseFloat(getComputedStyle(revealTextEl).fontSize) || 14;
+        particleCtx.font = `${formFontSize}px "Courier New", Courier, monospace`;
+        particleCtx.textAlign = "center";
+        particleCtx.textBaseline = "middle";
+        particleCtx.fillStyle = "#ffffff";
+        for (let i = formParticles.length - 1; i >= 0; i--) {
+          const fp = formParticles[i];
+          if (fp.leaving) {
+            fp.leaveLife -= dt;
+            fp.x += fp.vx * dt;
+            fp.y += fp.vy * dt;
+            fp.vx *= 0.98;
+            fp.vy *= 0.98;
+            fp.alpha = Math.max(0, fp.leaveLife / 2.2);
+            if (fp.leaveLife <= 0) { formParticles.splice(i, 1); continue; }
+          } else {
+            // Decay spawn velocity quickly, then exponential pull to target (no oscillation)
+            fp.vx *= 0.85;
+            fp.vy *= 0.85;
+            fp.x += fp.vx * dt;
+            fp.y += fp.vy * dt;
+            fp.x += (fp.tx - fp.x) * Math.min(1, dt * 9);
+            fp.y += (fp.ty - fp.y) * Math.min(1, dt * 9);
+            fp.alpha = Math.min(1, fp.alpha + dt * 5.0);
+          }
+          particleCtx.globalAlpha = fp.alpha;
+          particleCtx.fillText(fp.text, fp.x, fp.y);
+        }
+
+        particleCtx.globalAlpha = 1;
+      }
+
+      function draw(timeMs) {
+        const t = timeMs * 0.001;
+        const dt = Math.min(0.04, (timeMs - lastFrameMs) * 0.001);
+        lastFrameMs = timeMs;
+
+        const windTargetX = Math.sin(t * 0.18) * 12 + Math.sin(t * 0.63 + 1.3) * 5;
+        const windTargetY = -8 + Math.cos(t * 0.21 + 0.4) * 3.5;
+        windX += (windTargetX - windX) * Math.min(1, dt * 1.9);
+        windY += (windTargetY - windY) * Math.min(1, dt * 1.6);
+
+        flowBandVelocity += (Math.sin(t * 0.13 + 0.9) * 0.28 + (Math.random() - 0.5) * 0.09 - flowBandVelocity * 0.38) * dt;
+        flowBand += flowBandVelocity * 28 + Math.sin(t * 0.77) * dt * 6;
+        if (flowBand < 6) flowBand = 6;
+        if (flowBand > HEIGHT - 7) flowBand = HEIGHT - 7;
+
+        mergeProgress += (mergeTarget - mergeProgress) * Math.min(1, dt * 1.2);
+
+        if (mergeProgress > 0.28 && !mergeBurstFired) {
+          mergeBurstFired = true;
+          pendingBurst = 2.4;
+        }
+
+        merge2Progress += (merge2Target - merge2Progress) * Math.min(1, dt * 1.1);
+
+        // Phase-2 burst: particles fly outward from centre as paragraph forms
+        if (merge2Progress > 0.08 && !merge2BurstFired) {
+          merge2BurstFired = true;
+          pendingBurst = 1.8;
+        }
+
+        // Sweden fades out as merge completes
+        textReveal = Math.max(0, (mergeProgress - 0.75) / 0.25);
+        art.style.opacity = 1 - textReveal;
+        // "Vart ska jag bo?" fades out quickly once phase 2 starts
+        mergeTextEl.style.opacity = 0;
+
+        // DOM paragraph elements stay invisible — canvas draws everything via formParticles
+        revealTextEl.style.opacity = 0;
+        extraParas.forEach(para => { para.el.style.opacity = 0; });
+
+        // Track progress values (used only for sequential scroll gating)
+        extraParas.forEach(para => {
+          para.progress += (para.target - para.progress) * Math.min(1, dt * 1.1);
+        });
+
+        // Execute pending formation transition only once the current one is fully settled
+        if (pendingFormTransition && isFormationSettled()) {
+          const { spans, fromEl } = pendingFormTransition;
+          pendingFormTransition = null;
+          triggerFormTransition(getSpanTargets(spans), fromEl);
+        }
+
+        // Show "Så vart ska jag bo?" button once last paragraph has formed and settled
+        const btnVisible = scrollPhaseIdx >= 8 && !pendingFormTransition && isFormationSettled();
+        if (btnVisible) gameBtnEl.classList.add("visible");
+        else gameBtnEl.classList.remove("visible");
+
+        // Queue diagram — visible on extraParas[1] slide (scrollPhaseIdx 6–7)
+        const queueVisible = (scrollPhaseIdx === 6 || scrollPhaseIdx === 7)
+          && !pendingFormTransition && isFormationSettled();
+        updateQueueVisibility(queueVisible);
+
+        // Side diagrams — Ockelbo vs Östermalm (extraParas[0] slide, scrollPhaseIdx 4–5)
+        const sideDiagramsShow = (scrollPhaseIdx === 4 || scrollPhaseIdx === 5)
+          && !pendingFormTransition && isFormationSettled();
+        updateSideDiagrams(sideDiagramsShow, t);
+
+        injectAmbientBurst(dt, t);
+
+        // Dequeue one image per frame at most so they appear one-by-one
+        if (imageSpawnQueue.length > 0 && imageSpawnQueue[0].time <= t) {
+          const entry = imageSpawnQueue.shift();
+          spawnImageParticle(entry.intensity);
+        }
+
+        if (pendingBurst > 0.015) {
+          let burstsThisFrame = 0;
+          while (pendingBurst > 0.04 && burstsThisFrame < 3) {
+            const portion = Math.min(0.48, pendingBurst * (0.45 + Math.random() * 0.25));
+            triggerBurst(portion, t + burstsThisFrame * 0.09);
+            pendingBurst -= portion * (0.62 + Math.random() * 0.18);
+            burstsThisFrame++;
+          }
+          pendingBurst *= 0.965;
+        } else {
+          pendingBurst *= 0.92;
+        }
+
+        drawBase();
+        drawParticles(dt, t);
+        requestAnimationFrame(draw);
+      }
+
+      requestAnimationFrame(draw);
+
+      // ═══════════════════════════════════════════════════════
+      //  INTERACTIVE QUEUE DIAGRAM (shown on extraParas[1] slide)
+      // ═══════════════════════════════════════════════════════
+      const queueWrap   = document.getElementById("queue-wrap");
+      const queueCvs    = document.getElementById("queue-canvas");
+      const queueCtx2   = queueCvs.getContext("2d");
+      const queueTip    = document.getElementById("queue-tooltip");
+
+      const Q_MAX   = 18;    // axis max (years)
+      const Q_DOT_R = 1.0;   // dot radius px (small to allow 119 dots to stack)
+      const Q_GAP   = 0.3;   // min gap between dots
+      let Q_M       = { left: 64, right: 64, top: 28, bottom: 36 };
+
+      let queueLayout    = null;   // computed dot positions
+      let queueDirty     = true;   // needs (re)draw
+      let queueMouseLX   = -999;   // logical mouse coords
+      let queueMouseLY   = -999;
+
+      function queueLogX(waitAvg, W) {
+        return Q_M.left + (Math.min(waitAvg, Q_MAX) / Q_MAX) * (W - Q_M.left - Q_M.right);
+      }
+
+      function buildLayout(W, H) {
+        const data = window.__queueData;
+        if (!data || !data.length) return null;
+        const midY   = Q_M.top + (H - Q_M.top - Q_M.bottom) / 2;
+        const minD   = Q_DOT_R * 2 + Q_GAP;
+        const placed = [];
+        const sorted = [...data].sort((a, b) => a.waitAvg - b.waitAvg);
+        for (const m of sorted) {
+          const x = queueLogX(m.waitAvg, W);
+          let y = midY;
+          let ok = false;
+          for (let off = 0; off <= 200; off += minD) {
+            for (const s of (off === 0 ? [0] : [1, -1])) {
+              const ty = midY + s * off;
+              if (ty < Q_M.top + Q_DOT_R || ty > H - Q_M.bottom - Q_DOT_R) continue;
+              if (!placed.some(p => Math.hypot(p.x - x, p.y - ty) < minD)) {
+                y = ty; ok = true; break;
+              }
+            }
+            if (ok) break;
+          }
+          placed.push({ x, y, m });
+        }
+        return placed;
+      }
+
+      function resizeQueueCvs() {
+        const dpr      = Math.min(2, window.devicePixelRatio || 1);
+        const W        = queueWrap.getBoundingClientRect().width || window.innerWidth;
+        const vw       = window.innerWidth;
+        const vh       = window.innerHeight;
+        const isSmallW = vw  < 600;
+        const isSmallH = vh  < 500;
+
+        // Margins shrink on small screens so dots get more room
+        Q_M = isSmallW || isSmallH
+          ? { left: 36, right: 16, top: 14, bottom: 22 }
+          : { left: 64, right: 64, top: 28, bottom: 36 };
+
+        // Height: fraction of viewport, clamped sensibly per screen size
+        const frac = isSmallH ? 0.44 : (isSmallW ? 0.40 : 0.50);
+        const minH = isSmallH ? 130  : (isSmallW ? 150  : 280);
+        const H    = Math.round(Math.min(500, Math.max(minH, vh * frac)));
+
+        queueCvs.width  = W * dpr;
+        queueCvs.height = H * dpr;
+        queueCvs.style.width  = `${W}px`;
+        queueCvs.style.height = `${H}px`;
+      }
+
+      function drawQueueChart() {
+        const data = window.__queueData;
+        if (!data) return;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const W   = queueCvs.width  / dpr;
+        const H   = queueCvs.height / dpr;
+
+        if (!queueLayout) queueLayout = buildLayout(W, H);
+        if (!queueLayout) return;
+
+        queueCtx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+        queueCtx2.clearRect(0, 0, W, H);
+
+        // Axis
+        const axY = H - Q_M.bottom;
+        queueCtx2.strokeStyle = "rgba(255,255,255,0.7)";
+        queueCtx2.lineWidth = 1.5;
+        queueCtx2.beginPath();
+        queueCtx2.moveTo(Q_M.left, axY);
+        queueCtx2.lineTo(W - Q_M.right, axY);
+        queueCtx2.stroke();
+
+        // Ticks + labels — density adapts to available width
+        const chartW     = W - Q_M.left - Q_M.right;
+        const isNarrow   = chartW < 300;
+        const tickFontSz = isNarrow ? 8 : 10;
+        queueCtx2.textAlign = "center";
+        queueCtx2.fillStyle = "rgba(255,255,255,0.85)";
+        queueCtx2.font = `bold ${tickFontSz}px "Courier New", monospace`;
+        for (let yr = 0; yr <= Q_MAX; yr += (isNarrow ? 4 : (yr < 4 ? 1 : 2))) {
+          const tx = queueLogX(yr, W);
+          queueCtx2.strokeStyle = "rgba(255,255,255,0.6)";
+          queueCtx2.lineWidth = 1.5;
+          queueCtx2.beginPath();
+          queueCtx2.moveTo(tx, axY);
+          queueCtx2.lineTo(tx, axY + 5);
+          queueCtx2.stroke();
+          const showLabel = isNarrow ? (yr % 4 === 0 || yr === Q_MAX) : (yr % 2 === 0 || yr < 4);
+          if (showLabel) {
+            queueCtx2.fillText(yr === 0 ? "0" : `${yr} år`, tx, H - (isNarrow ? 5 : 7));
+          }
+        }
+
+        // Find hovered dot
+        let hovered = null;
+        if (queueMouseLX > 0) {
+          let best = 10;
+          for (const d of queueLayout) {
+            const dist = Math.hypot(d.x - queueMouseLX, d.y - queueMouseLY);
+            if (dist < best) { best = dist; hovered = d; }
+          }
+        }
+
+        // Dots
+        for (const d of queueLayout) {
+          const t     = Math.min(d.m.waitAvg / Q_MAX, 1);
+          const isHov = d === hovered;
+          const alpha = isHov ? 1 : (0.55 + t * 0.45);
+          const r     = isHov ? Q_DOT_R * 4 : Q_DOT_R;
+
+          queueCtx2.beginPath();
+          queueCtx2.arc(d.x, d.y, r, 0, Math.PI * 2);
+          queueCtx2.fillStyle = `rgba(255,255,255,${alpha})`;
+          if (isHov) { queueCtx2.shadowColor = "#fff"; queueCtx2.shadowBlur = 10; }
+          queueCtx2.fill();
+          queueCtx2.shadowBlur = 0;
+        }
+
+        // Tooltip
+        if (hovered) {
+          const rect  = queueCvs.getBoundingClientRect();
+          const scaleX = rect.width  / W;
+          const scaleY = rect.height / H;
+          const tx = rect.left + hovered.x * scaleX;
+          const ty = rect.top  + hovered.y * scaleY - 48;
+          const m  = hovered.m;
+          const wt = m.waitMin === m.waitMax
+            ? `${m.waitAvg} år`
+            : `${m.waitMin}–${m.waitMax} år`;
+          queueTip.innerHTML = `<strong>${m.name}</strong><br>${wt} · ${m.agency}`;
+          queueTip.style.left    = `${Math.min(tx, window.innerWidth - 220)}px`;
+          queueTip.style.top     = `${Math.max(8, ty)}px`;
+          queueTip.style.display = "block";
+        } else {
+          queueTip.style.display = "none";
+        }
+      }
+
+      queueCvs.addEventListener("mousemove", e => {
+        const dpr  = Math.min(2, window.devicePixelRatio || 1);
+        const rect = queueCvs.getBoundingClientRect();
+        queueMouseLX = (e.clientX - rect.left) * (queueCvs.width  / rect.width)  / dpr;
+        queueMouseLY = (e.clientY - rect.top)  * (queueCvs.height / rect.height) / dpr;
+        drawQueueChart();
+      }, { passive: true });
+
+      queueCvs.addEventListener("mouseleave", () => {
+        queueMouseLX = -999; queueMouseLY = -999;
+        queueTip.style.display = "none";
+        drawQueueChart();
+      }, { passive: true });
+
+      // ═══════════════════════════════════════════════════════
+      //  SIDE DIAGRAMS  ·  Ockelbo (left) vs Östermalm (right)
+      //  Both fill bottom-to-top on the same 0–20 yr scale.
+      //  Ockelbo  = ~1 yr  →  5% of bar height
+      //  Östermalm = ~20 yr → 100% of bar height
+      //  Visible on extraParas[0] slide  (scrollPhaseIdx 4–5)
+      // ═══════════════════════════════════════════════════════
+      const SD_MAX_YRS   = 20;
+      const SD_OCK_YRS   = 1;    // Ockelbo avg queue
+      const SD_OST_YRS   = 20;   // Östermalm avg queue
+      const SD_OCK_DUR   = 1.6;  // seconds for Ockelbo bar to fill
+      const SD_OST_DUR   = 4.2;  // seconds for Östermalm bar to fill
+
+      // Layout constants (logical px, pre-DPR)
+      const SD_W         = 140;
+      const SD_H         = 320;
+      const SD_BAR_TOP   = 48;
+      const SD_BAR_BOT   = 284;
+      const SD_BAR_H     = SD_BAR_BOT - SD_BAR_TOP;   // 236 px
+      const SD_BAR_X     = 22;
+      const SD_BAR_W     = 32;
+      const SD_PX_PER_YR = SD_BAR_H / SD_MAX_YRS;     // 11.8 px/yr
+
+      const ockWrap = document.getElementById("ockelbo-wrap");
+      const ostWrap = document.getElementById("ostermalm-wrap");
+      const ockCvs  = document.getElementById("ockelbo-canvas");
+      const ostCvs  = document.getElementById("ostermalm-canvas");
+      const ockCtx  = ockCvs.getContext("2d");
+      const ostCtx  = ostCvs.getContext("2d");
+
+      let sdVisible   = false;
+      let sdEnterTime = -1;
+
+      function sdResizeCvs(cvs) {
+        const dp = Math.min(2, window.devicePixelRatio || 1);
+        cvs.width        = SD_W * dp;
+        cvs.height       = SD_H * dp;
+        cvs.style.width  = SD_W + "px";
+        cvs.style.height = SD_H + "px";
+      }
+
+      function sdDraw(ctx, elapsed, isOck, tNow) {
+        const dp = Math.min(2, window.devicePixelRatio || 1);
+        ctx.setTransform(dp, 0, 0, dp, 0, 0);
+        ctx.clearRect(0, 0, SD_W, SD_H);
+
+        const fnt      = '"Courier New", Courier, monospace';
+        const dur      = isOck ? SD_OCK_DUR : SD_OST_DUR;
+        const prog     = Math.min(1, elapsed / dur);
+        const maxPx    = (isOck ? SD_OCK_YRS : SD_OST_YRS) / SD_MAX_YRS * SD_BAR_H;
+        const filledPx = maxPx * prog;
+        const fillTop  = SD_BAR_BOT - filledPx;   // both fill bottom → top
+        const barCx    = SD_BAR_X + SD_BAR_W / 2;
+        const titleCx  = SD_W / 2;
+
+        // ── Frosted dark panel so text is always readable ─────
+        ctx.fillStyle = "rgba(0,0,0,0.42)";
+        ctx.fillRect(0, 0, SD_W, SD_H);
+        ctx.strokeStyle = "rgba(255,255,255,0.07)";
+        ctx.lineWidth   = 0.5;
+        ctx.strokeRect(0.5, 0.5, SD_W - 1, SD_H - 1);
+
+        // ── Title ─────────────────────────────────────────────
+        ctx.save();
+        ctx.shadowColor = "rgba(255,255,255,0.30)";
+        ctx.shadowBlur  = 10;
+        ctx.fillStyle   = "#fff";
+        ctx.font        = `bold 11px ${fnt}`;
+        ctx.textAlign   = "center";
+        ctx.fillText(isOck ? "OCKELBO" : "ÖSTERMALM", titleCx, 19);
+        ctx.restore();
+
+        // Subtitle: year range
+        ctx.fillStyle = "rgba(255,255,255,0.72)";
+        ctx.font      = `9px ${fnt}`;
+        ctx.textAlign = "center";
+        ctx.fillText(isOck ? "0.5 – 1.5 år kötid" : "16 – 24 år kötid", titleCx, 32);
+
+        // Thin full-width divider
+        ctx.strokeStyle = "rgba(255,255,255,0.14)";
+        ctx.lineWidth   = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(10, 39);
+        ctx.lineTo(SD_W - 10, 39);
+        ctx.stroke();
+
+        // ── Faint grid lines across bar ───────────────────────
+        ctx.setLineDash([1.5, 4]);
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.lineWidth   = 0.5;
+        for (let yr = 0; yr <= SD_MAX_YRS; yr += 5) {
+          const ty = SD_BAR_BOT - yr * SD_PX_PER_YR;
+          ctx.beginPath();
+          ctx.moveTo(SD_BAR_X, ty);
+          ctx.lineTo(SD_BAR_X + SD_BAR_W, ty);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+
+        // ── Bar shell ─────────────────────────────────────────
+        ctx.fillStyle   = "rgba(255,255,255,0.06)";
+        ctx.fillRect(SD_BAR_X, SD_BAR_TOP, SD_BAR_W, SD_BAR_H);
+        ctx.strokeStyle = "rgba(255,255,255,0.28)";
+        ctx.lineWidth   = 0.7;
+        ctx.strokeRect(SD_BAR_X, SD_BAR_TOP, SD_BAR_W, SD_BAR_H);
+
+        // ── Gradient fill (bottom → top) ──────────────────────
+        if (filledPx > 0.8) {
+          const grad = ctx.createLinearGradient(0, fillTop, 0, SD_BAR_BOT);
+          grad.addColorStop(0, "rgba(255,255,255,0.96)");
+          grad.addColorStop(1, "rgba(255,255,255,0.28)");
+          ctx.fillStyle = grad;
+          ctx.fillRect(SD_BAR_X, fillTop, SD_BAR_W, filledPx);
+
+          // Bright glowing leading edge
+          ctx.save();
+          ctx.shadowColor = "rgba(255,255,255,0.95)";
+          ctx.shadowBlur  = 14;
+          ctx.fillStyle   = "#fff";
+          ctx.fillRect(SD_BAR_X, fillTop, SD_BAR_W, 2);
+          ctx.restore();
+        }
+
+        // ── Axis ticks + labels (right side) ──────────────────
+        const txX = SD_BAR_X + SD_BAR_W + 6;
+        ctx.strokeStyle = "rgba(255,255,255,0.30)";
+        ctx.lineWidth   = 0.6;
+        ctx.fillStyle   = "rgba(255,255,255,0.85)";
+        ctx.font        = `9px ${fnt}`;
+        ctx.textAlign   = "left";
+        for (let yr = 0; yr <= SD_MAX_YRS; yr += 5) {
+          const ty = SD_BAR_BOT - yr * SD_PX_PER_YR;
+          ctx.beginPath();
+          ctx.moveTo(SD_BAR_X + SD_BAR_W, ty);
+          ctx.lineTo(txX + 2, ty);
+          ctx.stroke();
+          ctx.fillText(`${yr}`, txX + 4, ty + 3.5);
+        }
+        ctx.fillStyle = "rgba(255,255,255,0.65)";
+        ctx.font      = `8px ${fnt}`;
+        ctx.fillText("år", txX + 4, SD_BAR_TOP - 5);
+
+        // ── Östermalm: rising year counter ────────────────────
+        if (!isOck && filledPx > 4) {
+          const dispY    = Math.round((filledPx / SD_BAR_H) * SD_MAX_YRS);
+          const counterY = Math.max(SD_BAR_TOP + 16, fillTop - 9);
+          ctx.save();
+          ctx.shadowColor = "rgba(255,255,255,0.50)";
+          ctx.shadowBlur  = 8;
+          ctx.fillStyle   = "#fff";
+          ctx.font        = `bold 11px ${fnt}`;
+          ctx.textAlign   = "center";
+          ctx.fillText(`${dispY} år`, barCx, counterY);
+          ctx.restore();
+        }
+
+        // ── Ockelbo: callout for the tiny bar ─────────────────
+        if (isOck && filledPx > 1) {
+          const edgeY  = fillTop;
+          const pulse  = 0.5 + 0.5 * Math.sin(tNow * 3.8);
+          const fadeIn = Math.min(1, (prog - 0.75) / 0.25);
+
+          // Glow dot at fill edge
+          ctx.save();
+          ctx.globalAlpha = fadeIn;
+          ctx.beginPath();
+          ctx.arc(barCx, edgeY, 2.5 + pulse * 1.3, 0, Math.PI * 2);
+          ctx.fillStyle   = "#fff";
+          ctx.shadowColor = "#fff";
+          ctx.shadowBlur  = 12 + pulse * 8;
+          ctx.fill();
+          ctx.restore();
+
+          // Dashed callout line
+          const lineEndX = SD_BAR_X + SD_BAR_W + 28;
+          ctx.save();
+          ctx.globalAlpha = fadeIn;
+          ctx.strokeStyle = "rgba(255,255,255,0.60)";
+          ctx.lineWidth   = 0.8;
+          ctx.setLineDash([2.5, 3]);
+          ctx.beginPath();
+          ctx.moveTo(SD_BAR_X + SD_BAR_W + 1, edgeY);
+          ctx.lineTo(lineEndX, edgeY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // "~1 år" label — full white, clearly readable
+          ctx.save();
+          ctx.shadowColor = "rgba(255,255,255,0.35)";
+          ctx.shadowBlur  = 6;
+          ctx.fillStyle   = "#fff";
+          ctx.font        = `bold 9.5px ${fnt}`;
+          ctx.textAlign   = "left";
+          ctx.fillText("~1 år", lineEndX + 3, edgeY + 3.5);
+          ctx.restore();
+          ctx.restore();
+        }
+
+        // ── Footer ────────────────────────────────────────────
+        if (filledPx > 2) {
+          const footerY = SD_BAR_BOT + 17;
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(255,255,255,0.82)";
+          ctx.font      = `bold 9px ${fnt}`;
+          ctx.fillText(isOck ? "~1 år kötid" : "~20 år kötid", titleCx, footerY);
+          ctx.fillStyle = "rgba(255,255,255,0.52)";
+          ctx.font      = `8px ${fnt}`;
+          ctx.fillText("i genomsnitt", titleCx, footerY + 13);
+        }
+      }
+
+      function updateSideDiagrams(show, t) {
+        const wasVis = sdVisible;
+        sdVisible = show;
+
+        if (show && !wasVis) {
+          sdEnterTime = t;
+          sdResizeCvs(ockCvs);
+          sdResizeCvs(ostCvs);
+          ockWrap.classList.add("visible");
+          ostWrap.classList.add("visible");
+        } else if (!show && wasVis) {
+          ockWrap.classList.remove("visible");
+          ostWrap.classList.remove("visible");
+          sdEnterTime = -1;
+        }
+
+        if (show && sdEnterTime >= 0) {
+          const el = t - sdEnterTime;
+          sdDraw(ockCtx, el, true,  t);
+          sdDraw(ostCtx, el, false, t);
+        }
+      }
+
+      // Show/hide queue diagram — managed from draw loop via queueDirty flag
+      function updateQueueVisibility(show) {
+        const isVis = queueWrap.classList.contains("visible");
+        if (show && !isVis) {
+          resizeQueueCvs();
+          queueLayout = null;
+          queueWrap.classList.add("visible");
+          queueDirty = true;
+        } else if (!show && isVis) {
+          queueWrap.classList.remove("visible");
+          queueTip.style.display = "none";
+          queueLayout = null;
+          queueDirty = true;
+        }
+        if (show && queueDirty && window.__queueData) {
+          queueDirty = false;
+          drawQueueChart();
+        }
+      }
+    </script>
+
+    <script type="module">
+      import { getAllMunicipalities } from './sweden-queue.js';
+      window.__queueData = getAllMunicipalities({ sortBy: "wait_asc" });
+    </script>
+  </body>
+</html>

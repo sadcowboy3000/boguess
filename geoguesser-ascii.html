@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoGuessr – ASCII Reveal</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0e0e0e;
+      color: #eee;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Layout ───────────────────────────────────────────────── */
+    #game-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Left: Street View + ASCII overlay */
+    #view-panel {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #street-view {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ASCII layer sits on top of Street View */
+    #ascii-overlay {
+      position: absolute;
+      inset: 0;
+      font-family: monospace;
+      font-size: 7px;
+      line-height: 1.15;
+      letter-spacing: 0.04em;
+      white-space: pre;
+      overflow: hidden;
+      padding: 4px;
+      background: #000;
+      color: #00ff88;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 1.4s ease;
+    }
+
+    /* Right: Guess map + UI */
+    #ui-panel {
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid #222;
+      background: #111;
+    }
+
+    #guess-map {
+      flex: 1;
+    }
+
+    #controls {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border-top: 1px solid #222;
+    }
+
+    #controls h3 {
+      font-size: 13px;
+      font-weight: 500;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    button {
+      padding: 10px 16px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      background: transparent;
+      color: #eee;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    button:hover { background: #1e1e1e; border-color: #555; }
+    button.primary { background: #00ff88; color: #000; border-color: #00ff88; font-weight: 600; }
+    button.primary:hover { background: #00e87a; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: #666;
+    }
+    .slider-row input { flex: 1; accent-color: #00ff88; }
+    .slider-row span { min-width: 28px; text-align: right; color: #aaa; }
+
+    #distance-result {
+      display: none;
+      font-size: 15px;
+      font-weight: 500;
+      color: #00ff88;
+      text-align: center;
+    }
+
+    #status-msg {
+      font-size: 12px;
+      color: #555;
+      text-align: center;
+      min-height: 16px;
+    }
+
+    /* Hidden canvas used for pixel sampling */
+    #ascii-canvas { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+
+  <!-- Street View + ASCII overlay -->
+  <div id="view-panel">
+    <div id="street-view"></div>
+    <div id="ascii-overlay"></div>
+  </div>
+
+  <!-- Guess map + controls -->
+  <div id="ui-panel">
+    <div id="guess-map"></div>
+    <div id="controls">
+      <h3>Your Guess</h3>
+      <p id="status-msg">Click on the map to place your guess.</p>
+
+      <!-- Shown after guess is submitted -->
+      <p id="distance-result"></p>
+
+      <!-- ASCII detail slider -->
+      <div class="slider-row">
+        Detail
+        <input type="range" id="ascii-detail" min="60" max="200" value="120" step="10">
+        <span id="detail-val">120</span>
+      </div>
+
+      <!-- Main action button -->
+      <button class="primary" id="action-btn" onclick="handleAction()">Submit Guess</button>
+
+      <!-- Reset for next round -->
+      <button id="next-btn" style="display:none" onclick="nextRound()">Next Round</button>
+    </div>
+  </div>
+
+</div>
+
+<canvas id="ascii-canvas"></canvas>
+
+<!--
+  Replace YOUR_API_KEY with your actual Google Maps API key.
+  Make sure these APIs are enabled in your Google Cloud project:
+    - Maps JavaScript API
+    - Street View Static API  ← needed for ASCII conversion
+-->
+<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initGame" async defer></script>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────────────────────────────
+
+const API_KEY = 'YOUR_API_KEY';          // same key used above
+
+// Add as many locations as you like: { lat, lng, label }
+const LOCATIONS = [
+  { lat: 48.8584,  lng: 2.2945,   label: 'Paris, France' },
+  { lat: 35.6762,  lng: 139.6503, label: 'Tokyo, Japan' },
+  { lat: -33.8688, lng: 151.2093, label: 'Sydney, Australia' },
+  { lat: 40.7580,  lng: -73.9855, label: 'New York, USA' },
+  { lat: 51.5074,  lng: -0.1278,  label: 'London, UK' },
+];
+
+// ASCII character ramp — darkest to lightest
+const CHARS = ' .`\'^-~+=<>ilL!I;:,"^rstx+?jf/\\vYXJUZO0Qoahkdbpqwm*WMB8&#%@';
+
+// ─────────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────────
+
+let streetView, guessMap, guessMarker;
+let currentLocation = null;
+let guessLatLng     = null;
+let phase           = 'guessing'; // 'guessing' | 'revealed'
+
+// ─────────────────────────────────────────────────────────────
+//  INIT  (called by Maps JS API callback)
+// ─────────────────────────────────────────────────────────────
+
+function initGame() {
+  // 1. Street View panorama (left panel)
+  streetView = new google.maps.StreetViewPanorama(
+    document.getElementById('street-view'),
+    {
+      addressControl:       false,
+      fullscreenControl:    false,
+      motionTracking:       false,
+      motionTrackingControl:false,
+      showRoadLabels:       false,
+    }
+  );
+
+  // 2. Guess map (right panel)
+  guessMap = new google.maps.Map(document.getElementById('guess-map'), {
+    zoom:              2,
+    center:            { lat: 20, lng: 0 },
+    disableDefaultUI:  true,
+    zoomControl:       true,
+    clickableIcons:    false,
+    styles: darkMapStyles(),
+  });
+
+  // Place / move marker on click
+  guessMap.addListener('click', (e) => {
+    if (phase !== 'guessing') return;
+    guessLatLng = e.latLng;
+
+    if (guessMarker) {
+      guessMarker.setPosition(guessLatLng);
+    } else {
+      guessMarker = new google.maps.Marker({
+        position: guessLatLng,
+        map:      guessMap,
+        icon: {
+          path:        google.maps.SymbolPath.CIRCLE,
+          scale:       8,
+          fillColor:   '#00ff88',
+          fillOpacity: 1,
+          strokeColor: '#000',
+          strokeWeight: 1.5,
+        },
+      });
+    }
+
+    document.getElementById('status-msg').textContent = 'Guess placed! Click Submit when ready.';
+  });
+
+  // Detail slider label
+  document.getElementById('ascii-detail').addEventListener('input', function() {
+    document.getElementById('detail-val').textContent = this.value;
+  });
+
+  startRound();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ROUND MANAGEMENT
+// ─────────────────────────────────────────────────────────────
+
+function startRound() {
+  phase       = 'guessing';
+  guessLatLng = null;
+
+  // Hide result UI
+  document.getElementById('distance-result').style.display = 'none';
+  document.getElementById('next-btn').style.display        = 'none';
+  document.getElementById('action-btn').style.display      = 'inline-block';
+  document.getElementById('status-msg').textContent        = 'Click on the map to place your guess.';
+
+  // Hide ASCII overlay
+  const overlay = document.getElementById('ascii-overlay');
+  overlay.style.opacity = '0';
+  overlay.textContent   = '';
+
+  // Remove old guess marker
+  if (guessMarker) { guessMarker.setMap(null); guessMarker = null; }
+
+  // Pick a random location and point Street View there
+  currentLocation = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+  streetView.setPosition(currentLocation);
+  streetView.setPov({ heading: 0, pitch: 0 });
+}
+
+function nextRound() {
+  startRound();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SUBMIT GUESS  →  calculate distance  →  trigger ASCII reveal
+// ─────────────────────────────────────────────────────────────
+
+function handleAction() {
+  if (!guessLatLng) {
+    document.getElementById('status-msg').textContent = 'Place a guess on the map first!';
+    return;
+  }
+
+  phase = 'revealed';
+  document.getElementById('action-btn').disabled = true;
+  document.getElementById('status-msg').textContent = 'Converting to ASCII…';
+
+  // Distance in km
+  const dist = haversineKm(
+    guessLatLng.lat(), guessLatLng.lng(),
+    currentLocation.lat, currentLocation.lng
+  );
+
+  document.getElementById('distance-result').style.display = 'block';
+  document.getElementById('distance-result').textContent =
+    `${Math.round(dist).toLocaleString()} km from ${currentLocation.label}`;
+
+  // Fetch Street View static image → convert → reveal
+  revealAscii().then(() => {
+    document.getElementById('action-btn').style.display = 'none';
+    document.getElementById('next-btn').style.display   = 'inline-block';
+    document.getElementById('status-msg').textContent   = 'ASCII rendered!';
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ASCII CONVERSION + REVEAL
+// ─────────────────────────────────────────────────────────────
+
+async function revealAscii() {
+  const cols    = parseInt(document.getElementById('ascii-detail').value);
+  const overlay = document.getElementById('ascii-overlay');
+  const canvas  = document.getElementById('ascii-canvas');
+  const ctx     = canvas.getContext('2d');
+
+  // Dimensions matching the view panel
+  const panel = document.getElementById('view-panel');
+  const W = panel.offsetWidth;
+  const H = panel.offsetHeight;
+  canvas.width  = W;
+  canvas.height = H;
+
+  // Build Street View Static API URL for current location + POV
+  const pov     = streetView.getPov();
+  const heading = Math.round(pov.heading);
+  const pitch   = Math.round(pov.pitch);
+  const imgUrl  =
+    `https://maps.googleapis.com/maps/api/streetview` +
+    `?size=${W}x${H}` +
+    `&location=${currentLocation.lat},${currentLocation.lng}` +
+    `&heading=${heading}` +
+    `&pitch=${pitch}` +
+    `&fov=90` +
+    `&key=${API_KEY}`;
+
+  // Load image onto canvas
+  await new Promise((resolve, reject) => {
+    const img  = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload  = () => { ctx.drawImage(img, 0, 0, W, H); resolve(); };
+    img.onerror = reject;
+    img.src     = imgUrl;
+  });
+
+  // Convert to ASCII
+  overlay.textContent = imageToAscii(ctx, W, H, cols);
+
+  // Fade in ASCII, fade out Street View
+  overlay.style.opacity = '1';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CORE: pixel data → ASCII string
+// ─────────────────────────────────────────────────────────────
+
+function imageToAscii(ctx, W, H, cols) {
+  // Character aspect ratio compensation (chars are taller than wide)
+  const CHAR_ASPECT = 2.1;
+  const cellW = W / cols;
+  const cellH = cellW * CHAR_ASPECT;
+  const rows  = Math.floor(H / cellH);
+
+  let output = '';
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = Math.floor(c * cellW);
+      const y = Math.floor(r * cellH);
+      const w = Math.max(1, Math.floor(cellW));
+      const h = Math.max(1, Math.floor(cellH));
+
+      // Average brightness of the cell block
+      const data = ctx.getImageData(x, y, w, h).data;
+      let brightness = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        brightness += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      }
+      brightness /= (data.length / 4);
+
+      // Map 0-255 → character index
+      const charIdx = Math.floor((brightness / 255) * (CHARS.length - 1));
+      output += CHARS[charIdx];
+    }
+    output += '\n';
+  }
+
+  return output;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  UTILS
+// ─────────────────────────────────────────────────────────────
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R  = 6371;
+  const dL = (lat2 - lat1) * Math.PI / 180;
+  const dG = (lng2 - lng1) * Math.PI / 180;
+  const a  =
+    Math.sin(dL / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dG / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Subtle dark map style for the guess map
+function darkMapStyles() {
+  return [
+    { elementType: 'geometry',   stylers: [{ color: '#1a1a1a' }] },
+    { elementType: 'labels.text.fill',   stylers: [{ color: '#555' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#111' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0d1b2a' }] },
+    { featureType: 'road',  elementType: 'geometry', stylers: [{ color: '#2a2a2a' }] },
+    { featureType: 'poi',   stylers: [{ visibility: 'off' }] },
+  ];
+}
+</script>
+</body>
+</html>
