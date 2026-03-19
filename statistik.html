@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bostadsstatistik · Sverige</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        background: #000;
+        color: #fff;
+        font-family: "Courier New", Courier, monospace;
+        min-height: 100%;
+      }
+
+      /* ── Header ────────────────────────────────────────────── */
+      .header {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        padding: 1rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        background: rgba(0,0,0,0.92);
+        backdrop-filter: blur(10px);
+        z-index: 10;
+      }
+
+      .header h1 {
+        font-size: clamp(0.75rem, 1.8vw, 1rem);
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        font-weight: normal;
+        text-shadow: 0 0 18px rgba(255,255,255,0.2);
+      }
+
+      .back-link {
+        color: rgba(255,255,255,0.7);
+        text-decoration: none;
+        font-size: 0.8rem;
+        letter-spacing: 0.08em;
+        border: 1px solid rgba(255,255,255,0.2);
+        padding: 0.35rem 0.8rem;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      .back-link:hover { color: #fff; border-color: rgba(255,255,255,0.7); }
+
+      /* ── Controls ──────────────────────────────────────────── */
+      .controls {
+        position: fixed;
+        top: 3.4rem; left: 0; right: 0;
+        padding: 0.7rem 2rem;
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+        background: rgba(0,0,0,0.88);
+        backdrop-filter: blur(10px);
+        z-index: 9;
+        flex-wrap: wrap;
+      }
+
+      .search {
+        flex: 1;
+        min-width: 160px;
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #fff;
+        font-family: inherit;
+        font-size: 0.82rem;
+        padding: 0.38rem 0.8rem;
+        letter-spacing: 0.05em;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .search::placeholder { color: rgba(255,255,255,0.28); }
+      .search:focus { border-color: rgba(255,255,255,0.55); }
+
+      .sort-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+      .sort-btn {
+        background: transparent;
+        color: rgba(255,255,255,0.45);
+        border: 1px solid rgba(255,255,255,0.12);
+        font-family: inherit;
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        padding: 0.32rem 0.65rem;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+        text-transform: uppercase;
+      }
+      .sort-btn:hover { color: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.35); }
+      .sort-btn.active { color: #fff; border-color: rgba(255,255,255,0.7); }
+
+      .tab-btn {
+        background: transparent;
+        color: rgba(255,255,255,0.5);
+        border: 1px solid rgba(255,255,255,0.15);
+        font-family: inherit;
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        padding: 0.32rem 0.8rem;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+        text-transform: uppercase;
+      }
+      .tab-btn:hover { color: rgba(255,255,255,0.85); border-color: rgba(255,255,255,0.4); }
+      .tab-btn.active { color: #fff; border-color: rgba(255,255,255,0.75); }
+
+      /* ── List ──────────────────────────────────────────────── */
+      .list {
+        margin-top: 7.2rem;
+        padding: 0 2rem 5rem;
+        max-width: 1200px;
+      }
+
+      .count {
+        font-size: 0.65rem;
+        letter-spacing: 0.14em;
+        color: rgba(255,255,255,0.28);
+        text-transform: uppercase;
+        padding: 1.1rem 0 0.6rem;
+      }
+
+      /* ── Municipality row ──────────────────────────────────── */
+      .muni {
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding: 0.85rem 0;
+        animation: fadeRow 0.25s ease both;
+      }
+
+      @keyframes fadeRow {
+        from { opacity: 0; transform: translateY(4px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      .muni-main {
+        display: grid;
+        grid-template-columns: minmax(160px, 1.8fr) minmax(130px, 1fr) minmax(0, 2.5fr);
+        gap: 1.2rem;
+        align-items: center;
+      }
+
+      .muni-name {
+        font-size: clamp(0.78rem, 1.4vw, 0.96rem);
+        letter-spacing: 0.04em;
+        color: #fff;
+      }
+
+      .muni-region {
+        font-size: 0.62rem;
+        color: rgba(255,255,255,0.35);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-top: 0.2rem;
+      }
+
+      .muni-queue-label {
+        font-size: 0.82rem;
+        letter-spacing: 0.04em;
+        color: rgba(255,255,255,0.9);
+      }
+
+      .muni-bar {
+        font-size: 0.52rem;
+        color: rgba(255,255,255,0.35);
+        letter-spacing: 0;
+        margin-top: 0.25rem;
+        line-height: 1;
+        user-select: none;
+      }
+
+      .muni-bar span {
+        color: rgba(255,255,255,0.75);
+      }
+
+      .muni-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        align-items: center;
+      }
+
+      .provider-link {
+        color: rgba(255,255,255,0.55);
+        text-decoration: none;
+        font-size: 0.65rem;
+        letter-spacing: 0.04em;
+        border: 1px solid rgba(255,255,255,0.12);
+        padding: 0.18rem 0.5rem;
+        transition: color 0.15s, border-color 0.15s;
+        white-space: nowrap;
+      }
+      .provider-link:hover { color: #fff; border-color: rgba(255,255,255,0.55); }
+      .provider-link.queue  { border-color: rgba(255,255,255,0.2); }
+      .provider-link.direct { border-color: rgba(255,255,255,0.08); }
+
+      .no-providers {
+        font-size: 0.65rem;
+        color: rgba(255,255,255,0.2);
+        letter-spacing: 0.06em;
+      }
+
+      /* ── Divider lines between regions ────────────────────── */
+      .region-divider {
+        font-size: 0.6rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.2);
+        padding: 1.4rem 0 0.3rem;
+        border-top: 1px solid rgba(255,255,255,0.05);
+      }
+
+      /* ── Responsive ────────────────────────────────────────── */
+      @media (max-width: 700px) {
+        .header { padding: 0.8rem 1rem; }
+        .controls { padding: 0.6rem 1rem; top: 3rem; }
+        .list { padding: 0 1rem 5rem; margin-top: 8.5rem; }
+        .muni-main { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+        .muni-links { grid-column: 1 / -1; }
+      }
+
+      @media (max-width: 480px) {
+        .muni-main { grid-template-columns: 1fr; gap: 0.3rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <h1>Bostadsstatistik &middot; Sverige</h1>
+      <div style="display:flex;gap:0.5rem;">
+        <button class="tab-btn active" data-tab="kommuner">Kommuner</button>
+        <button class="tab-btn" data-tab="stockholm">Stockholm</button>
+      </div>
+      <a class="back-link" href="game.html">← Tillbaka</a>
+    </header>
+
+    <div class="controls">
+      <input class="search" type="search" id="search-input"
+             placeholder="Sök kommun eller län..." autocomplete="off" />
+      <div class="sort-btns">
+        <button class="sort-btn active" data-sort="name">Namn</button>
+        <button class="sort-btn" data-sort="queue_asc">Kortast kö</button>
+        <button class="sort-btn" data-sort="queue_desc">Längst kö</button>
+        <button class="sort-btn" data-sort="region">Län</button>
+      </div>
+    </div>
+
+    <div class="list">
+      <div class="count" id="count"></div>
+      <div id="muni-list"></div>
+    </div>
+
+    <script type="module">
+      import { getAllMunicipalities } from './sweden-queue.js';
+      import { getProviders }        from './sweden-housing-providers.js';
+      import { getAllNeighbourhoods } from './stockholm-queue.js';
+
+      const ALL       = getAllMunicipalities();
+      const ALL_STHLM = getAllNeighbourhoods();
+      const MAX_QUEUE = 22;
+      let sortKey   = 'name';
+      let query     = '';
+      let activeTab = 'kommuner';
+
+      function queueBar(avg) {
+        const filled = Math.round((Math.min(avg, MAX_QUEUE) / MAX_QUEUE) * 20);
+        const empty  = 20 - filled;
+        return '<span>' + '▓'.repeat(Math.max(0, filled)) + '</span>' +
+               '░'.repeat(Math.max(0, empty));
+      }
+
+      function queueLabel(m) {
+        if (m.waitMin >= 0.5 && m.waitMax <= 1) return '< 1 år';
+        if (m.waitMin === m.waitMax) return `${m.waitAvg} år`;
+        return `${m.waitMin}–${m.waitMax} år`;
+      }
+
+      function getSorted() {
+        let list = [...ALL];
+        if (query) {
+          const q = query.toLowerCase();
+          list = list.filter(m =>
+            m.name.toLowerCase().includes(q) ||
+            m.region.toLowerCase().includes(q)
+          );
+        }
+        if (sortKey === 'name')       list.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+        if (sortKey === 'queue_asc')  list.sort((a, b) => a.waitAvg - b.waitAvg);
+        if (sortKey === 'queue_desc') list.sort((a, b) => b.waitAvg - a.waitAvg);
+        if (sortKey === 'region')     list.sort((a, b) => a.region.localeCompare(b.region, 'sv') || a.name.localeCompare(b.name, 'sv'));
+        return list;
+      }
+
+      function renderRow(m) {
+        const { municipal, large_private, small_private } = getProviders(m.name);
+        const seen = new Set();
+        const providers = [...municipal, ...small_private, ...large_private].filter(pv => {
+          if (seen.has(pv.name)) return false;
+          seen.add(pv.name);
+          return true;
+        }).slice(0, 6);
+
+        const links = providers.map(pv =>
+          `<a class="provider-link ${pv.hasQueue ? 'queue' : 'direct'}"
+              href="${pv.url}" target="_blank" rel="noopener"
+              title="${pv.description || pv.name}">${pv.name}</a>`
+        ).join('');
+
+        return `
+          <div class="muni">
+            <div class="muni-main">
+              <div>
+                <div class="muni-name">${m.name}</div>
+                <div class="muni-region">${m.region}</div>
+              </div>
+              <div>
+                <div class="muni-queue-label">${queueLabel(m)}</div>
+                <div class="muni-bar">${queueBar(m.waitAvg)}</div>
+              </div>
+              <div class="muni-links">
+                ${links || '<span class="no-providers">—</span>'}
+              </div>
+            </div>
+          </div>`;
+      }
+
+      function renderStockholmRow(n) {
+        const filled = Math.round((Math.min(n.waitAvg, MAX_QUEUE) / MAX_QUEUE) * 20);
+        const bar = '<span>' + '▓'.repeat(Math.max(0, filled)) + '</span>' + '░'.repeat(Math.max(0, 20 - filled));
+        const wLabel = (n.waitMin >= 0.5 && n.waitMax <= 1) ? '0,5 eller <1 år'
+                     : n.waitMin === n.waitMax ? `${n.waitAvg} år`
+                     : `${n.waitMin}–${n.waitMax} år`;
+        return `
+          <div class="muni">
+            <div class="muni-main">
+              <div>
+                <div class="muni-name">${n.name}</div>
+                <div class="muni-region">${n.district}</div>
+              </div>
+              <div>
+                <div class="muni-queue-label">${wLabel}</div>
+                <div class="muni-bar">${bar}</div>
+              </div>
+              <div>
+                <div class="muni-queue-label">${n.rent1room.toLocaleString('sv-SE')} kr/mån</div>
+                <div class="muni-bar" style="font-size:0.5rem;margin-top:0.1rem">30 kvm · hyresrätt</div>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      function getStockholmSorted() {
+        let list = [...ALL_STHLM];
+        if (query) {
+          const q = query.toLowerCase();
+          list = list.filter(n => n.name.toLowerCase().includes(q) || n.district.toLowerCase().includes(q));
+        }
+        if (sortKey === 'name')       list.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+        if (sortKey === 'queue_asc')  list.sort((a, b) => a.waitAvg - b.waitAvg);
+        if (sortKey === 'queue_desc') list.sort((a, b) => b.waitAvg - a.waitAvg);
+        if (sortKey === 'rent_asc')   list.sort((a, b) => a.rent1room - b.rent1room);
+        if (sortKey === 'rent_desc')  list.sort((a, b) => b.rent1room - a.rent1room);
+        if (sortKey === 'region') {
+          list.sort((a, b) => a.district.localeCompare(b.district, 'sv') || a.name.localeCompare(b.name, 'sv'));
+        }
+        return list;
+      }
+
+      const KOMMUNER_SORT_BTNS = `
+        <button class="sort-btn active" data-sort="name">Namn</button>
+        <button class="sort-btn" data-sort="queue_asc">Kortast kö</button>
+        <button class="sort-btn" data-sort="queue_desc">Längst kö</button>
+        <button class="sort-btn" data-sort="region">Län</button>`;
+
+      const STOCKHOLM_SORT_BTNS = `
+        <button class="sort-btn active" data-sort="name">Namn</button>
+        <button class="sort-btn" data-sort="queue_asc">Kortast kö</button>
+        <button class="sort-btn" data-sort="queue_desc">Längst kö</button>
+        <button class="sort-btn" data-sort="rent_asc">Lägst hyra</button>
+        <button class="sort-btn" data-sort="rent_desc">Högst hyra</button>
+        <button class="sort-btn" data-sort="region">Stadsdel</button>`;
+
+      function updateSortBtns() {
+        const container = document.querySelector('.sort-btns');
+        container.innerHTML = activeTab === 'stockholm' ? STOCKHOLM_SORT_BTNS : KOMMUNER_SORT_BTNS;
+        container.querySelectorAll('.sort-btn').forEach(btn => {
+          if (btn.dataset.sort === sortKey) btn.classList.add('active');
+          btn.addEventListener('click', () => {
+            sortKey = btn.dataset.sort;
+            container.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            render();
+          });
+        });
+      }
+
+      function render() {
+        if (activeTab === 'stockholm') {
+          const list = getStockholmSorted();
+          document.getElementById('count').textContent =
+            `${list.length} stadsdel${list.length !== 1 ? 'ar' : ''}`;
+          let html = '';
+          if (sortKey === 'region') {
+            let lastDistrict = null;
+            for (const n of list) {
+              if (n.district !== lastDistrict) {
+                html += `<div class="region-divider">${n.district}</div>`;
+                lastDistrict = n.district;
+              }
+              html += renderStockholmRow(n);
+            }
+          } else {
+            html = list.map(renderStockholmRow).join('');
+          }
+          document.getElementById('muni-list').innerHTML = html;
+        } else {
+          const list = getSorted();
+          document.getElementById('count').textContent =
+            `${list.length} kommun${list.length !== 1 ? 'er' : ''}`;
+          let html = '';
+          if (sortKey === 'region') {
+            let lastRegion = null;
+            for (const m of list) {
+              if (m.region !== lastRegion) {
+                html += `<div class="region-divider">${m.region}</div>`;
+                lastRegion = m.region;
+              }
+              html += renderRow(m);
+            }
+          } else {
+            html = list.map(renderRow).join('');
+          }
+          document.getElementById('muni-list').innerHTML = html;
+        }
+      }
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          activeTab = btn.dataset.tab;
+          sortKey = 'name';
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          updateSortBtns();
+          render();
+        });
+      });
+
+      updateSortBtns();
+
+      document.getElementById('search-input').addEventListener('input', e => {
+        query = e.target.value.trim();
+        render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>
