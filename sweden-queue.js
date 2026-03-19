@@ -345,7 +345,7 @@ function _getStatus(avg) {
 }
 
 function _toObject(m) {
-  const waitAvg = Math.round(((m[2] + m[3]) / 2) * 10) / 10;
+  const waitAvg = Math.round((m[2] + (m[3] - m[2]) * 0.25) * 10) / 10;
   return {
     name:        m[0],
     region:      m[1],

@@ -723,6 +723,7 @@ Ystad
       const EXTRA_PARA_RANGE = 400;
       const EXTRA_PARA_GAP   = 120;
       const EXTRA_PARA_TEXTS = [
+        "Trots att det byggs nya bostäder har få råd att bo där. Medelhyran är idag 10 000 kr för en nyproducerad enrummare genom bostadsförmedlingen i Stockholm. SCB belyser detta problem med statistik där 60% av de unga som flyttat från Stockholm gör det på grund av bostadspriser.",
         "Det är natt och dag i olika delar av Sverige när det kommer till kötid på bostäder. Där det är längst kötid tar det i genomsnitt 20 år. Och på vissa ställen är kötiden NOLL.",
         "Den som vill ha en hyresrätt i storstadsregionerna får vara beredd att vänta i decennier. Men på många andra platser råder egentligen ingen bostadsbrist.",
         "Hyresköer i storstäder som Stockholm och Göteborg kan kräva 20 respektive 10 års väntan, men på flera ställen i landet finns ingen bostadsbrist."
@@ -749,6 +750,11 @@ Ystad
       const particles = [];
       const MAX_PARTICLES = 1800;
       const imageParticles = [];
+      // ASCII people (extraParas[0] / "people leaving" slide)
+      const asciiPeople = [];
+      let   peopleSlideActive = false;
+      let   peopleSpawnAccum  = 0;
+      const PERSON_FRAMES = ['\\o/', '/o\\'];
       const MAX_IMAGE_PARTICLES = 10;
       const imageSpawnQueue = [];
       let pendingAmbientImage = 0;
@@ -1328,6 +1334,20 @@ Ystad
         });
       }
 
+      function spawnPerson() {
+        const side  = Math.random() < 0.5 ? -1 : 1;
+        const speed = 45 + Math.random() * 75;
+        asciiPeople.push({
+          x:     window.innerWidth  * (0.3 + Math.random() * 0.4),
+          y:     window.innerHeight * (0.18 + Math.random() * 0.58),
+          vx:    side * speed,
+          phase: Math.random() * Math.PI * 2,
+          frame: Math.random() < 0.5 ? 0 : 1,
+          age:   0,
+          life:  (window.innerWidth * 0.65 / speed) * 1.4
+        });
+      }
+
       function drawBase() {
         const frame = buildWordFrame();
         currentPlacements = frame.placements;
@@ -1641,7 +1661,7 @@ Ystad
       resizeAsciiBgCvs();
 
       function drawAsciiBg(dt, t) {
-        const shouldShow = scrollPhaseIdx >= 8 && !pendingFormTransition && isFormationSettled();
+        const shouldShow = scrollPhaseIdx >= 10 && !pendingFormTransition && isFormationSettled();
         asciiBgVis += ((shouldShow ? 1 : 0) - asciiBgVis) * Math.min(1, dt * 0.55);
 
         const d = window.devicePixelRatio || 1;
@@ -1929,6 +1949,32 @@ Ystad
           }
         }
 
+        // ASCII people walking off screen
+        if (asciiPeople.length > 0) {
+          const pfz = 12;
+          particleCtx.font = `${pfz}px "Courier New", Courier, monospace`;
+          particleCtx.textAlign = "center";
+          particleCtx.textBaseline = "middle";
+          particleCtx.fillStyle = "#ffffff";
+          for (let i = asciiPeople.length - 1; i >= 0; i--) {
+            const p = asciiPeople[i];
+            p.age += dt;
+            p.x   += p.vx * dt;
+            p.y   += Math.sin(p.phase + p.age * 4.5) * 0.55;
+            const lifeN = p.age / p.life;
+            if (lifeN >= 1 || p.x < -60 || p.x > window.innerWidth + 60) {
+              asciiPeople.splice(i, 1); continue;
+            }
+            const alpha = Math.min(1, p.age * 4) * Math.max(0, 1 - lifeN * 1.2);
+            if (alpha <= 0) continue;
+            particleCtx.globalAlpha = alpha;
+            // alternate walking frame every ~0.25s
+            const ch = PERSON_FRAMES[Math.floor(p.age * 4) % 2];
+            particleCtx.fillText(ch, p.x, p.y);
+          }
+          particleCtx.globalAlpha = 1;
+        }
+
         // Formation particles: spring toward target, scatter when leaving
         if (!formFontSize) formFontSize = parseFloat(getComputedStyle(revealTextEl).fontSize) || 14;
         particleCtx.font = `${formFontSize}px "Courier New", Courier, monospace`;
@@ -2015,12 +2061,12 @@ Ystad
         }
 
         // Show "Så vart ska jag bo?" button once last paragraph has formed and settled
-        const btnVisible = scrollPhaseIdx >= 8 && !pendingFormTransition && isFormationSettled();
+        const btnVisible = scrollPhaseIdx >= 10 && !pendingFormTransition && isFormationSettled();
         if (btnVisible) gameBtnEl.classList.add("visible");
         else gameBtnEl.classList.remove("visible");
 
-        // Queue diagram — visible on extraParas[1] slide (scrollPhaseIdx 6–7)
-        const queueVisible = (scrollPhaseIdx === 6 || scrollPhaseIdx === 7)
+        // Queue diagram — visible on extraParas[2] slide (scrollPhaseIdx 8–9)
+        const queueVisible = (scrollPhaseIdx === 8 || scrollPhaseIdx === 9)
           && !pendingFormTransition && isFormationSettled();
         updateQueueVisibility(queueVisible);
         if (queueRevealActive && window.__queueData) {
@@ -2029,10 +2075,26 @@ Ystad
           drawQueueChart();
         }
 
-        // Side diagrams — Ockelbo vs Östermalm (extraParas[0] slide, scrollPhaseIdx 4–5)
-        const sideDiagramsShow = (scrollPhaseIdx === 4 || scrollPhaseIdx === 5)
+        // Side diagrams — Ockelbo vs Östermalm (extraParas[1] slide, scrollPhaseIdx 6–7)
+        const sideDiagramsShow = (scrollPhaseIdx === 6 || scrollPhaseIdx === 7)
           && !pendingFormTransition && isFormationSettled();
         updateSideDiagrams(sideDiagramsShow, t);
+
+        // ASCII people — visible on "people leaving" slide (extraParas[0], scrollPhaseIdx 4–5)
+        const peopleShow = (scrollPhaseIdx === 4 || scrollPhaseIdx === 5)
+          && !pendingFormTransition && isFormationSettled();
+        if (peopleShow) {
+          if (!peopleSlideActive) { peopleSlideActive = true; asciiPeople.length = 0; peopleSpawnAccum = 0; }
+          peopleSpawnAccum += dt;
+          if (peopleSpawnAccum >= 0.18) {
+            peopleSpawnAccum = 0;
+            spawnPerson();
+            if (Math.random() < 0.45) spawnPerson();
+          }
+        } else if (peopleSlideActive) {
+          peopleSlideActive = false;
+          asciiPeople.length = 0;
+        }
 
         // Roads map — visible on "200 000 unga" slide (scrollPhaseIdx 2–3)
         drawRoads(dt, t);
@@ -2235,7 +2297,9 @@ Ystad
           const m  = hovered.m;
           const wt = m.waitMin === m.waitMax
             ? `${m.waitAvg} år`
-            : `${m.waitMin}–${m.waitMax} år`;
+            : m.waitMin >= 0.5 && m.waitMax <= 1
+              ? `0,5 eller <1 år`
+              : `${m.waitMin}–${m.waitMax} år`;
           queueTip.innerHTML = `<strong>${m.name}</strong><br>${wt} · ${m.agency}`;
           queueTip.style.left    = `${Math.min(tx, window.innerWidth - 220)}px`;
           queueTip.style.top     = `${Math.max(8, ty)}px`;
